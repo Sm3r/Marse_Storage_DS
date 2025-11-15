@@ -1,0 +1,22 @@
+# Build outputs
+build/
+bin/
+
+# Gradle
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# macOS
+.DS_Store
+
+# Compiled class files
+*.class
