@@ -1,13 +1,6 @@
 package ds.actors;
-import ds.data_structures.DataItem;
-import ds.data_structures.Settings;
-import ds.data_structures.Messages.OperationResult;
-import ds.data_structures.ResponseResult;
-import ds.data_structures.Messages.GetRequest;
-import ds.data_structures.Messages.Response;
-import ds.data_structures.Messages.UpdateRequest;
-
-
+import ds.config.Settings;
+import ds.model.Types.*;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.event.Logging;
@@ -18,11 +11,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
 
-
 // Handler actor
 public class Handler extends AbstractActor {
 
-    // Node fields
+    // Handler fields
     private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
     private final int op_id;
     private final ActorRef coordinator;
@@ -30,9 +22,6 @@ public class Handler extends AbstractActor {
     private final ArrayList<DataItem> quorum;
     private final int data_key;
     private final String newValue;
-    
-    // Timeout message
-    private static class OperationTimeout {}
 
     // Constructor
     public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key) {
@@ -76,16 +65,16 @@ public class Handler extends AbstractActor {
 
     private String getLatestValue() {
         String latestValue = quorum.stream()
-            .max(Comparator.comparingLong(DataItem::getVersion))
-            .map(DataItem::getValue)
+            .max(Comparator.comparingLong(DataItem::version))
+            .map(DataItem::value)
             .orElse(null);
         return latestValue;
     }
 
     private long getLatestVersion(){
         long latestVersion = quorum.stream()
-            .max(Comparator.comparingLong(DataItem::getVersion))
-            .map(DataItem::getVersion)
+            .max(Comparator.comparingLong(DataItem::version))
+            .map(DataItem::version)
             .orElse(0L);
         return latestVersion;
     }

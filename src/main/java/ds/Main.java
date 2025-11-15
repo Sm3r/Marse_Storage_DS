@@ -1,9 +1,7 @@
 package ds;
 import ds.actors.Node;
+import ds.model.Types.*;
 import ds.actors.Client;
-import ds.data_structures.DataItem;
-import ds.data_structures.Messages.*;
-
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 import akka.actor.Props;
@@ -52,7 +50,7 @@ public class Main {
                 }
             }
             
-            client.tell(new Client.NodeMessage(nodeId, new Node.SetPeers(peersForNode)), 
+            client.tell(new Client.NodeMessage(nodeId, new SetPeers(peersForNode)), 
                     ActorRef.noSender());
         }
 
@@ -61,19 +59,19 @@ public class Main {
         
         // Print initial state of all nodes (with initial data)
         System.out.println("--- Initial State ---");
-        client.tell(new Client.NodeMessage(10, new Node.Print()),
+        client.tell(new Client.NodeMessage(10, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.Print()),
+        client.tell(new Client.NodeMessage(20, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Node.Print()),
+        client.tell(new Client.NodeMessage(30, new Print()),
                 ActorRef.noSender());
         
         // Print peers for each node
-        client.tell(new Client.NodeMessage(10, new Node.PrintPeers()),
+        client.tell(new Client.NodeMessage(10, new PrintPeers()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.PrintPeers()),
+        client.tell(new Client.NodeMessage(20, new PrintPeers()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Node.PrintPeers()),
+        client.tell(new Client.NodeMessage(30, new PrintPeers()),
                 ActorRef.noSender());
         
         // Add new nodes dynamically
@@ -83,46 +81,46 @@ public class Main {
         
         // Add data operations to existing nodes
         System.out.println("\n--- Data Operations on Existing Nodes ---");
-        client.tell(new Client.NodeMessage(10, new Node.Update(1, "one")),
+        client.tell(new Client.NodeMessage(10, new Update(1, "one")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(10, new Node.Update(2, "two")),
+        client.tell(new Client.NodeMessage(10, new Update(2, "two")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.Update(1, "uno")),
+        client.tell(new Client.NodeMessage(20, new Update(1, "uno")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.Update(3, "three")),
+        client.tell(new Client.NodeMessage(20, new Update(3, "three")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Node.Update(4, "four")),
+        client.tell(new Client.NodeMessage(30, new Update(4, "four")),
                 ActorRef.noSender());
         
         // Update existing values
         System.out.println("\n--- Updating Existing Values ---");
-        client.tell(new Client.NodeMessage(10, new Node.Update(1, "ONE")),
+        client.tell(new Client.NodeMessage(10, new Update(1, "ONE")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.Update(1, "UNO")),
+        client.tell(new Client.NodeMessage(20, new Update(1, "UNO")),
                 ActorRef.noSender());
         
         // Add more data to new nodes
         System.out.println("\n--- Operations on New Nodes ---");
-        client.tell(new Client.NodeMessage(40, new Node.Update(5, "five")),
+        client.tell(new Client.NodeMessage(40, new Update(5, "five")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(50, new Node.Update(6, "six")),
+        client.tell(new Client.NodeMessage(50, new Update(6, "six")),
                 ActorRef.noSender());
         
         // Update values in new nodes
-        client.tell(new Client.NodeMessage(40, new Node.Update(5, "FIVE")),
+        client.tell(new Client.NodeMessage(40, new Update(5, "FIVE")),
                 ActorRef.noSender());
         
         // Print current state of all nodes
         System.out.println("\n--- Final State of All Nodes ---");
-        client.tell(new Client.NodeMessage(10, new Node.Print()),
+        client.tell(new Client.NodeMessage(10, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Node.Print()),
+        client.tell(new Client.NodeMessage(20, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Node.Print()),
+        client.tell(new Client.NodeMessage(30, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(40, new Node.Print()),
+        client.tell(new Client.NodeMessage(40, new Print()),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(50, new Node.Print()),
+        client.tell(new Client.NodeMessage(50, new Print()),
                 ActorRef.noSender());
         
         // Remove a node
@@ -133,7 +131,7 @@ public class Main {
         client.tell(new Client.PrintNodes(), ActorRef.noSender());
         
         // Try to send message to removed node (should show warning)
-        client.tell(new Client.NodeMessage(30, new Node.Print()),
+        client.tell(new Client.NodeMessage(30, new Print()),
                 ActorRef.noSender());
         
         System.out.println("\n=== Execution Commands Sent ===");

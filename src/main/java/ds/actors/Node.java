@@ -1,25 +1,19 @@
 package ds.actors;
-import ds.data_structures.DataItem;
-import ds.data_structures.Request;
-import ds.data_structures.Settings;
-import ds.data_structures.Messages.Get;
-import ds.data_structures.Messages.Update;
-import ds.data_structures.Messages.SetPeers;
-import ds.data_structures.Messages.UpdatePeer;
-import ds.data_structures.Messages.Print;
-import ds.data_structures.Messages.PrintPeers;
+
+import ds.model.Request;
+import ds.model.Types.*;
+import ds.config.Settings;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 // Node actor
 public class Node extends AbstractActor {
@@ -76,22 +70,28 @@ public class Node extends AbstractActor {
     }
 
     private void get(Get msg) {
-        
+        log.debug("Node[{}]: Received GET request for key {}", id, msg.key());
+        // TODO: Implement distributed GET operation with quorum
     }
+    
     private void update(Update msg) {
-        // Implementation of getting data from replicas
+        data.put(msg.key(), new DataItem(msg.value()));
+        log.info("Node[{}]: Updated key {} with value {}", id, msg.key(), msg.value());
     }
     private void setPeers(SetPeers msg) {
-        // Implementation of setting peers
+        peers.clear();
+        peers.putAll(msg.peers());
+        log.info("Node[{}]: Peers set to {}", id, peers.keySet());
     }
     private void updatePeer(UpdatePeer msg) {
-        // Implementation of updating a peer
+        peers.put(msg.id(), msg.peer());
+        log.info("Node[{}]: Peer {} updated", id, msg.id());
     }
     private void print(Print msg) {
-        // Implementation of printing current data store
+        log.info("Node[{}]: Data store content: {}", id, data);
     }
     private void printPeers(PrintPeers msg) {
-        // Implementation of printing peers
+        log.info("Node[{}]: Known peers: {}", id, peers.keySet());
     }
 
    @Override

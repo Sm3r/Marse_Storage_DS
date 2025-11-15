@@ -1,4 +1,4 @@
-package ds.data_structures;
+package ds.config;
 
 public class Settings {
     // Replication factor

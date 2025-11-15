@@ -1,4 +1,4 @@
-package ds.data_structures;
+package ds.model;
 
 public enum RequestType {
     GET,
