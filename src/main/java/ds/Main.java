@@ -1,150 +1,80 @@
 package ds;
-import ds.actors.Node;
-import ds.model.Types.*;
-import ds.model.Delayer;
-import ds.actors.Client;
-import akka.actor.ActorRef;
-import akka.actor.ActorSystem;
-import akka.actor.Props;
 
-import java.util.Map;
-import java.util.TreeMap;
-
-// Main class
+// Main class - minimal entry point
 public class Main {
 
     public static void main(String[] args) {
-
-        ActorSystem system = ActorSystem.create("MainSystem");
-        Delayer delayer = new Delayer(system);
-
-        // Prepare initial data for each node
-        Map<Integer, DataItem> dataNode10 = new TreeMap<>();
-        dataNode10.put(1, new DataItem("apple"));
-        dataNode10.put(2, new DataItem("banana"));
         
-        Map<Integer, DataItem> dataNode20 = new TreeMap<>();
-        dataNode20.put(3, new DataItem("cherry"));
-        dataNode20.put(4, new DataItem("date"));
+        // Create management service
+        ManagementService service = new ManagementService();
         
-        Map<Integer, DataItem> dataNode30 = new TreeMap<>();
-        dataNode30.put(5, new DataItem("elderberry"));
-        dataNode30.put(6, new DataItem("fig"));
-
-        // Create node actors with initial data (peers will be set after creation)
-        Map<Integer, ActorRef> nodes = new TreeMap<>();
-        nodes.put(10, system.actorOf(Props.create(Node.class, () -> new Node(10, new java.util.HashMap<Integer, ActorRef>(), dataNode10, delayer))));
-        nodes.put(20, system.actorOf(Props.create(Node.class, () -> new Node(20, new java.util.HashMap<Integer, ActorRef>(), dataNode20, delayer))));
-        nodes.put(30, system.actorOf(Props.create(Node.class, () -> new Node(30, new java.util.HashMap<Integer, ActorRef>(), dataNode30, delayer))));
-
-        // Create client actor
-        ActorRef client = system.actorOf(Props.create(Client.class, () -> new Client(1, nodes, delayer)));
-
-        // Set peers for each node (each node knows about all other nodes)
-        for (Map.Entry<Integer, ActorRef> entry : nodes.entrySet()) {
-            int nodeId = entry.getKey();
-            
-            // Create a map of peers excluding the node itself
-            Map<Integer, ActorRef> peersForNode = new TreeMap<>();
-            for (Map.Entry<Integer, ActorRef> peerEntry : nodes.entrySet()) {
-                if (peerEntry.getKey() != nodeId) {
-                    peersForNode.put(peerEntry.getKey(), peerEntry.getValue());
-                }
-            }
-            
-            client.tell(new Client.NodeMessage(nodeId, new SetPeers(peersForNode)), 
-                    ActorRef.noSender());
-        }
-
+        // Initialize the system with initial nodes
+        service.initialize();
+        
         // Execution
         System.out.println("=== Starting Execution ===\n");
         
-        client.tell(new Client.NodeMessage(10, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Print()),
-                ActorRef.noSender());
+        // Print initial state
+        service.printNode(10);
+        service.printNode(20);
+        service.printNode(30);
+        service.printNode(40);
+        service.printNode(50);
         
         // Print peers for each node
-        client.tell(new Client.NodeMessage(10, new PrintPeers()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new PrintPeers()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new PrintPeers()),
-                ActorRef.noSender());
-        
-        // Add new nodes dynamically
-        System.out.println("\n--- Adding New Nodes ---");
-        client.tell(new Client.AddNode(40), ActorRef.noSender());
-        client.tell(new Client.AddNode(50), ActorRef.noSender());
+        service.printPeers(10);
+        service.printPeers(20);
+        service.printPeers(30);
+        service.printPeers(40);
+        service.printPeers(50);
         
         // Add data operations to existing nodes
         System.out.println("\n--- Data Operations on Existing Nodes ---");
-        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(1, "one")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(2, "two")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(1, "uno")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(3, "three")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new ClientUpdateRequest(4, "four")),
-                ActorRef.noSender());
+        service.sendUpdateRequest(1,10, 1, "APPLE");
+        service.sendUpdateRequest(1,20, 4, "DATE");
+        service.sendUpdateRequest(2,30, 7, "GRAPE");
+        service.sendUpdateRequest(1,40, 10, "LEMON");
+        service.sendUpdateRequest(2,50, 13, "ORANGE");
         
         // Update existing values
         System.out.println("\n--- Updating Existing Values ---");
-        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(1, "ONE")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(1, "UNO")),
-                ActorRef.noSender());
+        service.sendUpdateRequest(1,10, 2, "BANANA");
+        service.sendUpdateRequest(2,20, 5, "ELDERBERRY");
         
         // Add more data to new nodes
         System.out.println("\n--- Operations on New Nodes ---");
-        client.tell(new Client.NodeMessage(40, new ClientUpdateRequest(5, "five")),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(50, new ClientUpdateRequest(6, "six")),
-                ActorRef.noSender());
+        service.sendUpdateRequest(2,60, 16, "raspberry");
+        service.sendUpdateRequest(2,70, 17, "strawberry");
         
         // Update values in new nodes
-        client.tell(new Client.NodeMessage(40, new ClientUpdateRequest(5, "FIVE")),
-                ActorRef.noSender());
+        service.sendUpdateRequest(2,60, 16, "RASPBERRY");
         
         // Print current state of all nodes
         System.out.println("\n--- Final State of All Nodes ---");
-        client.tell(new Client.NodeMessage(10, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(40, new Print()),
-                ActorRef.noSender());
-        client.tell(new Client.NodeMessage(50, new Print()),
-                ActorRef.noSender());
+        service.printNode(10);
+        service.printNode(20);
+        service.printNode(30);
+        service.printNode(40);
+        service.printNode(50);
+        service.printNode(60);
+        service.printNode(70);
         
         // Remove a node
         System.out.println("\n--- Node Removal Test ---");
-        client.tell(new Client.RemoveNode(30), ActorRef.noSender());
+        service.removeNode(30);
         
-        // Print active nodes
-        client.tell(new Client.PrintNodes(), ActorRef.noSender());
-        
-        // Try to send message to removed node (should show warning)
-        client.tell(new Client.NodeMessage(30, new Print()),
-                ActorRef.noSender());
+        // Try to send message to removed node
+        if (!service.nodeExists(30)) {
+            System.out.println("Node 30 is no longer available");
+        }
         
         System.out.println("\n=== Execution Commands Sent ===");
         
         // Wait for messages to be processed
-        try {
-            Thread.sleep(2000); // Wait 2 seconds for all messages to be processed
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        service.waitForProcessing(2000);
         
         // Terminate the ActorSystem to end the program
-        system.terminate();
+        service.shutdown();
         System.out.println("\n=== System Terminated ===");
     }
 }

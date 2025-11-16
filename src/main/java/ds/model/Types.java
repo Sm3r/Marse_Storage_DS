@@ -1,6 +1,7 @@
 package ds.model;
 
 import java.util.Map;
+
 import akka.actor.ActorRef;
 
 public class Types {
@@ -45,4 +46,10 @@ public class Types {
     // ==================== Handler Internal Messages ====================
     
     public record OperationTimeout() {}
+
+    // ==================== Joining operation ====================
+    public record JoinRequest(int nodeId, ActorRef nodeRef) {}
+    public record RegisterPeers(Map<Integer, ActorRef> peers) {}
+    public record GetAllDataItems(int nodeId) {}
+    public record SendAllDataItems(Map<Integer, DataItem> dataItems) {}
 }
