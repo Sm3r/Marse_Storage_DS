@@ -1,5 +1,6 @@
 package ds.actors;
 
+import ds.model.Delayer;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
@@ -22,11 +23,13 @@ public class Client extends AbstractActor {
     private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
     private final int id;
     private final Map<Integer, ActorRef> nodes;
+    private final Delayer delayer;
 
     // Constructor
-    public Client(int id, Map<Integer, ActorRef> nodeMap) {
+    public Client(int id, Map<Integer, ActorRef> nodeMap, Delayer delayer) {
         this.id = id;
         this.nodes = new TreeMap<>(nodeMap);
+        this.delayer = delayer;
     }
 
     @Override
@@ -36,7 +39,7 @@ public class Client extends AbstractActor {
                 .match(AddNode.class, msg -> {
                     if (!nodes.containsKey(msg.nodeId())) {
                         ActorRef node = getContext().actorOf(
-                            Props.create(Node.class, () -> new Node(msg.nodeId())),
+                            Props.create(Node.class, () -> new Node(msg.nodeId(), delayer)),
                             "node" + msg.nodeId()
                         );
                         nodes.put(msg.nodeId(), node);
@@ -60,7 +63,7 @@ public class Client extends AbstractActor {
                     ActorRef node = nodes.get(msg.nodeId());
                     if (node != null) {
                         log.debug("Client[{}]: Forwarding message {} to node {}", id, msg.message().getClass().getSimpleName(), msg.nodeId());
-                        node.tell(msg.message(), getSelf());
+                        delayer.delayedMsg(node, msg.message(), getSelf());
                     } else {
                         log.warning("Client[{}]: Node not found -> {}", id, msg.nodeId());
                     }

@@ -1,5 +1,6 @@
 package ds.actors;
 
+import ds.model.Delayer;
 import ds.model.Request;
 import ds.model.RequestType;
 import ds.model.Types.*;
@@ -26,27 +27,31 @@ public class Node extends AbstractActor {
     private final Map<Integer, DataItem> data;
     private final Map<Integer, ActorRef> peers;
     private final Map<Integer, Request> requestsLedger;
+    private final Delayer delayer;
 
     // Constructors
-    public Node(int id) {
+    public Node(int id, Delayer delayer) {
         this.id = id;
         this.data = new HashMap<>();
         this.peers = new HashMap<>();
         this.requestsLedger = new HashMap<>();
+        this.delayer = delayer;
     }
 
-    public Node(int id, Map<Integer, ActorRef> peers) {
+    public Node(int id, Map<Integer, ActorRef> peers, Delayer delayer) {
         this.id = id;
         this.data = new HashMap<>();
         this.peers = new HashMap<>(peers);
         this.requestsLedger = new HashMap<>();
+        this.delayer = delayer;
     }
 
-    public Node(int id, Map<Integer, ActorRef> peers, Map<Integer, DataItem> data) {
+    public Node(int id, Map<Integer, ActorRef> peers, Map<Integer, DataItem> data, Delayer delayer) {
         this.id = id;
         this.data = new HashMap<>(data);
         this.peers = new HashMap<>(peers);
         this.requestsLedger = new HashMap<>();
+        this.delayer = delayer;
     }
 
     private List<Integer> findReplicaNodesIds(int key, List<Integer> NodeIds) {
@@ -101,7 +106,7 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.GET));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key()));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), delayer));
     }
     
     private void handleClientUpdateRequest(ClientUpdateRequest msg) {
@@ -113,7 +118,7 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value()));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), delayer));
     }
 
     private void handleReadDataRequest(ReadDataRequest msg) {
@@ -126,19 +131,18 @@ public class Node extends AbstractActor {
         log.debug("Node[{}]: Received operation result for operation {}", id, msg.op_id());
         Request request = requestsLedger.get(msg.op_id());
         if (request != null) {
-            request.getRequester().tell(msg, getSelf());
+            // Use delayed message to send back to client (inter-entity)
+            delayer.delayedMsg(request.getRequester(), msg, getSelf());
             requestsLedger.get(msg.op_id()).addResponseResult(msg.result());
         }
     }
-    
+
     private void setPeers(SetPeers msg) {
         peers.clear();
         peers.putAll(msg.peers());
-        log.info("Node[{}]: Peers set to {}", id, peers.keySet());
     }
     private void updatePeer(UpdatePeer msg) {
         peers.put(msg.id(), msg.peer());
-        log.info("Node[{}]: Peer {} updated", id, msg.id());
     }
     private void print(Print msg) {
         log.info("Node[{}]: Data store content: {}", id, data);

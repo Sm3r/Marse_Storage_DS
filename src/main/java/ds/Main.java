@@ -1,6 +1,7 @@
 package ds;
 import ds.actors.Node;
 import ds.model.Types.*;
+import ds.model.Delayer;
 import ds.actors.Client;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
@@ -15,6 +16,7 @@ public class Main {
     public static void main(String[] args) {
 
         ActorSystem system = ActorSystem.create("MainSystem");
+        Delayer delayer = new Delayer(system);
 
         // Prepare initial data for each node
         Map<Integer, DataItem> dataNode10 = new TreeMap<>();
@@ -31,12 +33,12 @@ public class Main {
 
         // Create node actors with initial data (peers will be set after creation)
         Map<Integer, ActorRef> nodes = new TreeMap<>();
-        nodes.put(10, system.actorOf(Props.create(Node.class, () -> new Node(10, new java.util.HashMap<>(), dataNode10))));
-        nodes.put(20, system.actorOf(Props.create(Node.class, () -> new Node(20, new java.util.HashMap<>(), dataNode20))));
-        nodes.put(30, system.actorOf(Props.create(Node.class, () -> new Node(30, new java.util.HashMap<>(), dataNode30))));
+        nodes.put(10, system.actorOf(Props.create(Node.class, () -> new Node(10, new java.util.HashMap<Integer, ActorRef>(), dataNode10, delayer))));
+        nodes.put(20, system.actorOf(Props.create(Node.class, () -> new Node(20, new java.util.HashMap<Integer, ActorRef>(), dataNode20, delayer))));
+        nodes.put(30, system.actorOf(Props.create(Node.class, () -> new Node(30, new java.util.HashMap<Integer, ActorRef>(), dataNode30, delayer))));
 
         // Create client actor
-        ActorRef client = system.actorOf(Props.create(Client.class, 1, nodes));
+        ActorRef client = system.actorOf(Props.create(Client.class, () -> new Client(1, nodes, delayer)));
 
         // Set peers for each node (each node knows about all other nodes)
         for (Map.Entry<Integer, ActorRef> entry : nodes.entrySet()) {
@@ -54,11 +56,9 @@ public class Main {
                     ActorRef.noSender());
         }
 
-        // Complex execution scenario
-        System.out.println("=== Starting Complex Execution ===\n");
+        // Execution
+        System.out.println("=== Starting Execution ===\n");
         
-        // Print initial state of all nodes (with initial data)
-        System.out.println("--- Initial State ---");
         client.tell(new Client.NodeMessage(10, new Print()),
                 ActorRef.noSender());
         client.tell(new Client.NodeMessage(20, new Print()),

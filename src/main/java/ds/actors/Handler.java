@@ -1,5 +1,6 @@
 package ds.actors;
 import ds.config.Settings;
+import ds.model.Delayer;
 import ds.model.Types.*;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
@@ -22,26 +23,29 @@ public class Handler extends AbstractActor {
     private final ArrayList<DataItem> quorum;
     private final int data_key;
     private final String newValue;
+    private final Delayer delayer;
 
     // Constructor
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, Delayer delayer) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
         this.quorum = quorum;
         this.data_key = key;
         this.newValue = null;
+        this.delayer = delayer;
         scheduleTimeout();
         sendReadDataRequests(key);
     }
 
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value, Delayer delayer) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
         this.quorum = quorum;
         this.data_key = key;
         this.newValue = value;
+        this.delayer = delayer;
         scheduleTimeout();
         sendReadDataRequests(key);
     }
@@ -59,7 +63,7 @@ public class Handler extends AbstractActor {
     
     private void sendReadDataRequests(int id) {
         for (ActorRef node : nodes) {
-            node.tell(new ReadDataRequest(id), getSelf());
+            delayer.delayedMsg(node, new ReadDataRequest(id), getSelf());
         }
     }
 
@@ -80,7 +84,9 @@ public class Handler extends AbstractActor {
     }
 
     private void handleReadDataResponse(ReadDataResponse msg) {
-        quorum.add(msg.value());
+        if (msg.value() != null) {
+            quorum.add(msg.value());
+        }
         if (quorum.size() >= (newValue == null ? Settings.R : Settings.W)) {
             if (newValue == null) {
                 String latestValue = getLatestValue();
