@@ -32,44 +32,54 @@ public class Client extends AbstractActor {
         this.delayer = delayer;
     }
 
+    // Add a new node as a child
+    private void handleAddNode(AddNode msg) {
+        if (!nodes.containsKey(msg.nodeId())) {
+            ActorRef node = getContext().actorOf(
+                Props.create(Node.class, () -> new Node(msg.nodeId(), delayer)),
+                "node" + msg.nodeId()
+            );
+            nodes.put(msg.nodeId(), node);
+            log.info("Client[{}]: Node added -> {}", id, msg.nodeId());
+        } else {
+            log.warning("Client[{}]: Node already exists -> {}", id, msg.nodeId());
+        }
+    }
+
+    // Remove an existing child node
+    private void handleRemoveNode(RemoveNode msg) {
+        ActorRef node = nodes.remove(msg.nodeId());
+        if (node != null) {
+            getContext().stop(node);
+            log.info("Client[{}]: Node removed -> {}", id, msg.nodeId());
+        } else {
+            log.warning("Client[{}]: Node not found -> {}", id, msg.nodeId());
+        }
+    }
+
+    // Forward messages to a specific node
+    private void handleNodeMessage(NodeMessage msg) {
+        ActorRef node = nodes.get(msg.nodeId());
+        if (node != null) {
+            log.debug("Client[{}]: Forwarding message {} to node {}", id, msg.message().getClass().getSimpleName(), msg.nodeId());
+            delayer.delayedMsg(node, msg.message(), getSelf());
+        } else {
+            log.warning("Client[{}]: Node not found -> {}", id, msg.nodeId());
+        }
+    }
+
+    // Print all nodes
+    private void handlePrintNodes(PrintNodes msg) {
+        log.info("Client[{}]: Active nodes -> {}", id, nodes.keySet());
+    }
+
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                // Add a new node as a child
-                .match(AddNode.class, msg -> {
-                    if (!nodes.containsKey(msg.nodeId())) {
-                        ActorRef node = getContext().actorOf(
-                            Props.create(Node.class, () -> new Node(msg.nodeId(), delayer)),
-                            "node" + msg.nodeId()
-                        );
-                        nodes.put(msg.nodeId(), node);
-                        log.info("Client[{}]: Node added -> {}", id, msg.nodeId());
-                    } else {
-                        log.warning("Client[{}]: Node already exists -> {}", id, msg.nodeId());
-                    }
-                })
-                // Remove an existing child node
-                .match(RemoveNode.class, msg -> {
-                    ActorRef node = nodes.remove(msg.nodeId());
-                    if (node != null) {
-                        getContext().stop(node);
-                        log.info("Client[{}]: Node removed -> {}", id, msg.nodeId());
-                    } else {
-                        log.warning("Client[{}]: Node not found -> {}", id, msg.nodeId());
-                    }
-                })
-                // Forward messages to a specific node
-                .match(NodeMessage.class, msg -> {
-                    ActorRef node = nodes.get(msg.nodeId());
-                    if (node != null) {
-                        log.debug("Client[{}]: Forwarding message {} to node {}", id, msg.message().getClass().getSimpleName(), msg.nodeId());
-                        delayer.delayedMsg(node, msg.message(), getSelf());
-                    } else {
-                        log.warning("Client[{}]: Node not found -> {}", id, msg.nodeId());
-                    }
-                })
-                // Print all nodes
-                .match(PrintNodes.class, msg -> log.info("Client[{}]: Active nodes -> {}", id, nodes.keySet()))
+                .match(AddNode.class, this::handleAddNode)
+                .match(RemoveNode.class, this::handleRemoveNode)
+                .match(NodeMessage.class, this::handleNodeMessage)
+                .match(PrintNodes.class, this::handlePrintNodes)
                 .build();
     }
 }
