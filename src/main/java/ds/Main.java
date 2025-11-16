@@ -81,33 +81,33 @@ public class Main {
         
         // Add data operations to existing nodes
         System.out.println("\n--- Data Operations on Existing Nodes ---");
-        client.tell(new Client.NodeMessage(10, new Update(1, "one")),
+        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(1, "one")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(10, new Update(2, "two")),
+        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(2, "two")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Update(1, "uno")),
+        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(1, "uno")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Update(3, "three")),
+        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(3, "three")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(30, new Update(4, "four")),
+        client.tell(new Client.NodeMessage(30, new ClientUpdateRequest(4, "four")),
                 ActorRef.noSender());
         
         // Update existing values
         System.out.println("\n--- Updating Existing Values ---");
-        client.tell(new Client.NodeMessage(10, new Update(1, "ONE")),
+        client.tell(new Client.NodeMessage(10, new ClientUpdateRequest(1, "ONE")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(20, new Update(1, "UNO")),
+        client.tell(new Client.NodeMessage(20, new ClientUpdateRequest(1, "UNO")),
                 ActorRef.noSender());
         
         // Add more data to new nodes
         System.out.println("\n--- Operations on New Nodes ---");
-        client.tell(new Client.NodeMessage(40, new Update(5, "five")),
+        client.tell(new Client.NodeMessage(40, new ClientUpdateRequest(5, "five")),
                 ActorRef.noSender());
-        client.tell(new Client.NodeMessage(50, new Update(6, "six")),
+        client.tell(new Client.NodeMessage(50, new ClientUpdateRequest(6, "six")),
                 ActorRef.noSender());
         
         // Update values in new nodes
-        client.tell(new Client.NodeMessage(40, new Update(5, "FIVE")),
+        client.tell(new Client.NodeMessage(40, new ClientUpdateRequest(5, "FIVE")),
                 ActorRef.noSender());
         
         // Print current state of all nodes

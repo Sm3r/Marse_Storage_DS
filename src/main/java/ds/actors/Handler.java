@@ -32,7 +32,7 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = null;
         scheduleTimeout();
-        sendGetRequests(key);
+        sendReadDataRequests(key);
     }
 
     public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value) {
@@ -43,7 +43,7 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = value;
         scheduleTimeout();
-        sendGetRequests(key);
+        sendReadDataRequests(key);
     }
 
     // Functions
@@ -57,9 +57,9 @@ public class Handler extends AbstractActor {
         );
     }
     
-    private void sendGetRequests(int id) {
+    private void sendReadDataRequests(int id) {
         for (ActorRef node : nodes) {
-            node.tell(new GetRequest(id), getSelf());
+            node.tell(new ReadDataRequest(id), getSelf());
         }
     }
 
@@ -79,18 +79,18 @@ public class Handler extends AbstractActor {
         return latestVersion;
     }
 
-    private void responseHandler(Response msg) {
+    private void handleReadDataResponse(ReadDataResponse msg) {
         quorum.add(msg.value());
         if (quorum.size() >= (newValue == null ? Settings.R : Settings.W)) {
             if (newValue == null) {
                 String latestValue = getLatestValue();
-                log.info("Handler[{}]: Quorum achieved for GET request. Latest value: {}", op_id, latestValue);
+                log.info("Handler[{}]: Read quorum achieved. Latest value: {}", op_id, latestValue);
                 coordinator.tell(new OperationResult(op_id, new ResponseResult(true, latestValue)), getSelf());
             } else {
-                log.info("Handler[{}]: Quorum achieved for UPDATE request.", op_id);
+                log.info("Handler[{}]: Read quorum achieved for update operation.", op_id);
                 long latestVersion = getLatestVersion();
                 for (ActorRef node : nodes) {
-                    node.tell(new UpdateRequest(data_key, new DataItem(newValue, latestVersion + 1)), getSelf());
+                    node.tell(new WriteDataRequest(data_key, new DataItem(newValue, latestVersion + 1)), getSelf());
                 }
                 coordinator.tell(new OperationResult(op_id, new ResponseResult(true, "UPDATE_SUCCESS")), getSelf());
             }
@@ -107,7 +107,7 @@ public class Handler extends AbstractActor {
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(Response.class, this::responseHandler)
+                .match(ReadDataResponse.class, this::handleReadDataResponse)
                 .match(OperationTimeout.class, this::handleTimeout)
                 .build();
     }

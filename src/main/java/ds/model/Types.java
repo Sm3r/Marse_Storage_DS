@@ -15,28 +15,31 @@ public class Types {
     
     public record ResponseResult(boolean success, String value) {}
     
-    // ==================== Client to Node Messages ====================
+    // ==================== Client -> Coordinator Node Messages ====================
     
-    public record Get(int key) {}
-    public record Update(int key, String value) {}
+    public record ClientGetRequest(int key) {}
+    public record ClientUpdateRequest(int key, String value) {}
     public record SetPeers(Map<Integer, ActorRef> peers) {}
     public record UpdatePeer(int id, ActorRef peer) {}
     public record Print() {}
     public record PrintPeers() {}
     
-    // ==================== Node to Client Messages ====================
+    // ==================== Coordinator Node -> Client Messages ====================
     
-    public record GetResponse(int key, DataItem value) {}
-    public record UpdateResponse(int key, boolean success) {}
+    public record ClientGetResponse(int key, DataItem value) {}
+    public record ClientUpdateResponse(int key, boolean success) {}
     
-    // ==================== Node to Handler Messages ====================
+    // ==================== Handler -> Replica Node Messages ====================
     
-    public record Response(DataItem value) {}
+    public record ReadDataRequest(int key) {}
+    public record WriteDataRequest(int key, DataItem dataItem) {}
     
-    // ==================== Handler to Node Messages ====================
+    // ==================== Replica Node -> Handler Messages ====================
     
-    public record GetRequest(int key) {}
-    public record UpdateRequest(int key, DataItem dataItem) {}
+    public record ReadDataResponse(DataItem value) {}
+    
+    // ==================== Handler -> Coordinator Node Messages ====================
+    
     public record OperationResult(int op_id, ResponseResult result) {}
     
     // ==================== Handler Internal Messages ====================
