@@ -14,14 +14,12 @@ public class Types {
         }
     }
     
-    public record ResponseResult(boolean success, String value) {}
-    
     // ==================== Client -> Coordinator Node Messages ====================
     
     public record ClientGetRequest(int key) {}
     public record ClientUpdateRequest(int key, String value) {}
     public record SetPeers(Map<Integer, ActorRef> peers) {}
-    public record UpdatePeer(int id, ActorRef peer) {}
+    public record AddPeer(int id, ActorRef peer) {}
     public record Print() {}
     public record PrintPeers() {}
     
@@ -41,7 +39,7 @@ public class Types {
     
     // ==================== Handler -> Coordinator Node Messages ====================
     
-    public record OperationResult(int op_id, ResponseResult result) {}
+    public record Result(int op_id, DataItem value) {}
     
     // ==================== Handler Internal Messages ====================
     

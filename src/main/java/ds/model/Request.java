@@ -1,16 +1,25 @@
 package ds.model;
 
 import akka.actor.ActorRef;
-import ds.model.Types.ResponseResult;
+import ds.model.Types.Result;
 
 public class Request {
+
+    public enum RequestType {
+        GET,
+        UPDATE,
+        GET_JOIN,
+    }
+
     private final ActorRef requester;
     private final RequestType type;
-    private ResponseResult result;
+    private final int dataKey;
+    private Result result;
 
-    public Request(ActorRef requester, RequestType type) {
+    public Request(ActorRef requester, RequestType type, int dataKey) {
         this.requester = requester;
         this.type = type;
+        this.dataKey = dataKey;
         this.result = null;
     }
 
@@ -21,12 +30,23 @@ public class Request {
     public RequestType getType() {
         return type;
     }
-
-    public ResponseResult getResult() {
+    
+    public int getDataKey() {
+        return dataKey;
+    }
+    
+    public Result getResult() {
         return result;
     }
-
-    public void addResponseResult(ResponseResult result) {
+    
+    public void setResult(Result result) {
         this.result = result;
     }
+    
+    public boolean isCompleted() {
+        return result != null;
+    }
+
 }
+
+

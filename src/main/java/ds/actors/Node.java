@@ -2,7 +2,7 @@ package ds.actors;
 
 import ds.model.Delayer;
 import ds.model.Request;
-import ds.model.RequestType;
+import ds.model.Request.RequestType;
 import ds.model.Types;
 import ds.model.Types.*;
 import ds.config.Settings;
@@ -119,7 +119,7 @@ public class Node extends AbstractActor {
         prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
         
         int op_id = generateOperationId();
-        requestsLedger.put(op_id, new Request(getSender(), RequestType.GET));
+        requestsLedger.put(op_id, new Request(getSender(), RequestType.GET, msg.key()));
         getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), delayer));
     }
     
@@ -131,7 +131,7 @@ public class Node extends AbstractActor {
         prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
         
         int op_id = generateOperationId();
-        requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE));
+        requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE, msg.key()));
         getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), delayer));
     }
 
@@ -141,13 +141,16 @@ public class Node extends AbstractActor {
         getSender().tell(new ReadDataResponse(value), getSelf());
     }
 
-    private void handleOperationResult(OperationResult msg) {
+    private void handleWriteDataRequest(WriteDataRequest msg) {
+        log.debug("Node[{}]: Updating key {} with value '{}'", id, msg.key(), msg.dataItem().value());
+        data.put(msg.key(), msg.dataItem());
+    }
+
+    private void handleOperationResult(Result msg) {
         log.debug("Node[{}]: Received operation result for operation {}", id, msg.op_id());
         Request request = requestsLedger.get(msg.op_id());
         if (request != null) {
-            // Use delayed message to send back to client (inter-entity)
             delayer.delayedMsg(request.getRequester(), msg, getSelf());
-            requestsLedger.get(msg.op_id()).addResponseResult(msg.result());
         }
     }
 
@@ -183,7 +186,7 @@ public class Node extends AbstractActor {
         getSender().tell(new Types.SendAllDataItems(dataItems), getSelf());
     }
 
-    private void handleAddPeer(UpdatePeer msg) {
+    private void handleAddPeer(AddPeer msg) {
         if (!peers.containsKey(msg.id()) && msg.id() != this.id) {
             peers.put(msg.id(), msg.peer());
             log.info("Node[{}]: Added new peer Node[{}]", id, msg.id());
@@ -214,15 +217,49 @@ public class Node extends AbstractActor {
         
         for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
             int key = entry.getKey();
-            
             ArrayList<ActorRef> nodeRefs = new ArrayList<>();
             ArrayList<DataItem> quorum = new ArrayList<>();
             prepareReplicasAndQuorum(key, nodeRefs, quorum);
             int op_id = generateOperationId();
-            requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET));
+            requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
             getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, delayer));
-            
             log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
+        }
+    }
+
+    private void handleOperationResultJoin(Result msg) {
+        Request request = requestsLedger.get(msg.op_id());
+        if (request != null) {
+            // Update the value in data if the one in the message is newer
+            if (msg.value() != null) {
+                DataItem existingData = data.get(request.getDataKey());
+                if (existingData == null || msg.value().version() > existingData.version()) {
+                    data.put(request.getDataKey(), msg.value());
+                    log.info("Node[{}]: Updated key {} with value '{}' (version: {}) from join operation", 
+                            id, msg.op_id(), msg.value().value(), msg.value().version());
+                }
+            }
+            
+            // Add the result to the ledger
+            request.setResult(msg);
+            delayer.delayedMsg(request.getRequester(), msg, getSelf());
+            
+            // Check if all GET_JOIN operations are completed
+            boolean allJoinOpsCompleted = true;
+            for (Request req : requestsLedger.values()) {
+                if (req.getType() == RequestType.GET_JOIN && !req.isCompleted()) {
+                    allJoinOpsCompleted = false;
+                    break;
+                }
+            }
+            
+            // If all GET_JOIN operations are completed, notify all peers to add this node
+            if (allJoinOpsCompleted) {
+                log.info("Node[{}]: All join operations completed, notifying peers", id);
+                for (ActorRef peer : peers.values()) {
+                    peer.tell(new AddPeer(id, getSelf()), getSelf());
+                }
+            }
         }
     }
 
@@ -247,6 +284,7 @@ public class Node extends AbstractActor {
         return receiveBuilder()
                 .match(RegisterPeers.class, this::handleRegisterPeers)
                 .match(SendAllDataItems.class, this::handleSendAllDataItems)
+                .match(Result.class, this::handleOperationResultJoin)
                 .matchAny(msg -> log.warning("Node[{}]: Rejecting message - node is still joining the network", id))
                 .build();
     }
@@ -256,10 +294,11 @@ public class Node extends AbstractActor {
                 .match(ClientGetRequest.class, this::handleClientGetRequest)
                 .match(ClientUpdateRequest.class, this::handleClientUpdateRequest)
                 .match(ReadDataRequest.class, this::handleReadDataRequest)
-                .match(OperationResult.class, this::handleOperationResult)
+                .match(WriteDataRequest.class, this::handleWriteDataRequest)
+                .match(Result.class, this::handleOperationResult)
                 .match(JoinRequest.class, this::handleJoinRequest)
                 .match(GetAllDataItems.class, this::handleGetAllDataItems)
-                .match(UpdatePeer.class, this::handleAddPeer)
+                .match(AddPeer.class, this::handleAddPeer)
                 .match(Print.class, this::print)
                 .match(PrintPeers.class, this::printPeers)
                 .matchAny(msg -> log.warning("Node[{}]: Received unknown message: {}", id, msg.getClass().getSimpleName()))

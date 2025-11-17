@@ -91,14 +91,14 @@ public class Handler extends AbstractActor {
             if (newValue == null) {
                 String latestValue = getLatestValue();
                 log.info("Handler[{}]: Read quorum achieved. Latest value: {}", op_id, latestValue);
-                coordinator.tell(new OperationResult(op_id, new ResponseResult(true, latestValue)), getSelf());
+                coordinator.tell(new Result(op_id, new DataItem(latestValue, getLatestVersion())), getSelf());
             } else {
                 log.info("Handler[{}]: Read quorum achieved for update operation.", op_id);
                 long latestVersion = getLatestVersion();
                 for (ActorRef node : nodes) {
                     node.tell(new WriteDataRequest(data_key, new DataItem(newValue, latestVersion + 1)), getSelf());
                 }
-                coordinator.tell(new OperationResult(op_id, new ResponseResult(true, "UPDATE_SUCCESS")), getSelf());
+                coordinator.tell(new Result(op_id, new DataItem("UPDATE_SUCCESS", latestVersion + 1)), getSelf());
             }
             getContext().stop(getSelf());
         }
@@ -106,7 +106,7 @@ public class Handler extends AbstractActor {
     
     private void handleTimeout(OperationTimeout msg) {
         log.warning("Handler[{}]: Operation timeout occurred", op_id);
-        coordinator.tell(new OperationResult(op_id, new ResponseResult(false, "TIMEOUT")), getSelf());
+        coordinator.tell(new Result(op_id, null), getSelf());
         getContext().stop(getSelf());
     }
 
