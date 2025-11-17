@@ -7,7 +7,7 @@ repositories {
     mavenCentral()
     mavenLocal()
     maven {
-        url "https://repo.akka.io/maven"
+        url = "https://repo.akka.io/maven"
     }
 }
 
@@ -31,7 +31,9 @@ compileJava {
     options.compilerArgs += ["-Xlint:deprecation"]
 }
 
-mainClassName = "ds.Main"
+application {
+    mainClass = "ds.Main"
+}
 
 run {
     standardInput = System.in

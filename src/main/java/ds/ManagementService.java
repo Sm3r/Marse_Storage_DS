@@ -48,11 +48,15 @@ public class ManagementService {
     public void initialize() {
 
         // Create initial nodes
-        nodes.put(10, system.actorOf(Props.create(Node.class, () -> new Node(10, pickRandom(nodes), delayer))));
-        nodes.put(20, system.actorOf(Props.create(Node.class, () -> new Node(20, pickRandom(nodes), delayer))));
-        nodes.put(30, system.actorOf(Props.create(Node.class, () -> new Node(30, pickRandom(nodes), delayer))));
-        nodes.put(40, system.actorOf(Props.create(Node.class, () -> new Node(40, pickRandom(nodes), delayer))));
-        nodes.put(50, system.actorOf(Props.create(Node.class, () -> new Node(50, pickRandom(nodes), delayer))));
+        addNode(10);
+        waitForProcessing(1000);
+        addNode(20);
+        waitForProcessing(1000);
+        addNode(30);
+        waitForProcessing(1000);
+        addNode(40);
+        waitForProcessing(1000);
+        addNode(50);
 
         // Create client actor
         clients.put(1, system.actorOf(Props.create(Client.class, () -> new Client(1, nodes, delayer))));
@@ -62,7 +66,9 @@ public class ManagementService {
     // Add a new node to the system
     public void addNode(int nodeId) {
         if (!nodes.containsKey(nodeId)) {
-            nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, pickRandom(nodes), delayer)), "node" + nodeId));
+            // Pick a bootstrapper node BEFORE creating the new node
+            ActorRef bootstrapper = pickRandom(nodes);
+            nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
             System.out.println("Node " + nodeId + " added. Active nodes: " + nodes.keySet());
         } else {
             System.out.println("Node " + nodeId + " already exists");

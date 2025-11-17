@@ -6,7 +6,6 @@ import akka.actor.ActorRef;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 
-import java.util.TreeMap;
 import java.util.Map;
 
 // Client actor
@@ -27,7 +26,7 @@ public class Client extends AbstractActor {
     public Client(int id, Map<Integer, ActorRef> nodeMap, Delayer delayer) {
         this.id = id;
         this.delayer = delayer;
-        this.nodes = new TreeMap<>(nodeMap); 
+        this.nodes = nodeMap; // Use the reference to the shared map
     }
 
     // Handle GET request from client

@@ -204,26 +204,39 @@ public class Node extends AbstractActor {
         ActorRef clockwiseNeighbor = getClockwiseNeighbor();
         if (clockwiseNeighbor != null) {
             clockwiseNeighbor.tell(new GetAllDataItems(id), getSelf());
+            log.info("Node[{}]: Waiting for data items from clockwise neighbor before transitioning to ready state", id);
+        } else {
+            // No clockwise neighbor, so no data to receive - transition immediately
+            log.info("Node[{}]: No clockwise neighbor found, transitioning to ready state", id);
+            getContext().become(ready());
         }
-        
-        // Transition from joining to ready state after successful peer registration
-        log.info("Node[{}]: Join complete, transitioning to ready state", id);
-        getContext().become(ready());
     }
 
     private void handleSendAllDataItems(SendAllDataItems msg) {
-        log.info("Node[{}]: Received data items from clockwise neighbor", id);
+        log.info("Node[{}]: Received {} data items from clockwise neighbor", id, msg.dataItems().size());
         this.data.putAll(msg.dataItems());
         
-        for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
-            int key = entry.getKey();
-            ArrayList<ActorRef> nodeRefs = new ArrayList<>();
-            ArrayList<DataItem> quorum = new ArrayList<>();
-            prepareReplicasAndQuorum(key, nodeRefs, quorum);
-            int op_id = generateOperationId();
-            requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
-            getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, delayer));
-            log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
+        if (msg.dataItems().isEmpty()) {
+            // No data items to sync, transition to ready state immediately
+            log.info("Node[{}]: No data items to sync, transitioning to ready state", id);
+            getContext().become(ready());
+            
+            // Notify all peers to add this node
+            for (ActorRef peer : peers.values()) {
+                peer.tell(new AddPeer(id, getSelf()), getSelf());
+            }
+        } else {
+            // Spawn handlers to sync data items
+            for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
+                int key = entry.getKey();
+                ArrayList<ActorRef> nodeRefs = new ArrayList<>();
+                ArrayList<DataItem> quorum = new ArrayList<>();
+                prepareReplicasAndQuorum(key, nodeRefs, quorum);
+                int op_id = generateOperationId();
+                requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
+                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, delayer));
+                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
+            }
         }
     }
 
@@ -259,6 +272,7 @@ public class Node extends AbstractActor {
                 for (ActorRef peer : peers.values()) {
                     peer.tell(new AddPeer(id, getSelf()), getSelf());
                 }
+                getContext().become(ready());
             }
         }
     }
