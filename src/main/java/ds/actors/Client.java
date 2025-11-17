@@ -26,7 +26,7 @@ public class Client extends AbstractActor {
     public Client(int id, Map<Integer, ActorRef> nodeMap, Delayer delayer) {
         this.id = id;
         this.delayer = delayer;
-        this.nodes = nodeMap; // Use the reference to the shared map
+        this.nodes = nodeMap;
     }
 
     // Handle GET request from client

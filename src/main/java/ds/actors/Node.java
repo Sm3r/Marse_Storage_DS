@@ -124,7 +124,7 @@ public class Node extends AbstractActor {
     }
     
     private void handleClientUpdateRequest(ClientUpdateRequest msg) {
-        log.debug("Node[{}]: Received client UPDATE request for key {} with value {}", id, msg.key(), msg.value());
+        log.info("Node[{}]: Received client UPDATE request for key {} with value {}", id, msg.key(), msg.value());
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
@@ -136,13 +136,13 @@ public class Node extends AbstractActor {
     }
 
     private void handleReadDataRequest(ReadDataRequest msg) {
-        log.debug("Node[{}]: Handling read data request for key {}", id, msg.key());
+        log.info("Node[{}]: Handling read data request for key {}", id, msg.key());
         DataItem value = data.get(msg.key());
         getSender().tell(new ReadDataResponse(value), getSelf());
     }
 
     private void handleWriteDataRequest(WriteDataRequest msg) {
-        log.debug("Node[{}]: Updating key {} with value '{}'", id, msg.key(), msg.dataItem().value());
+        log.info("Node[{}]: Updating key {} with value '{}'", id, msg.key(), msg.dataItem().value());
         data.put(msg.key(), msg.dataItem());
     }
 
@@ -281,10 +281,14 @@ public class Node extends AbstractActor {
 
     // ====================== Utility Messages ====================
     private void print(Print msg) {
-        log.info("Node[{}]: Data store content: {}", id, data);
+        String output = String.format("Node[%d]: Data store content: %s", id, data);
+        log.info(output);
+        System.out.println(output);
     }
     private void printPeers(PrintPeers msg) {
-        log.info("Node[{}]: Known peers: {}", id, peers.keySet());
+        String output = String.format("Node[%d]: Known peers: %s", id, peers.keySet());
+        log.info(output);
+        System.out.println(output);
     }
 
 

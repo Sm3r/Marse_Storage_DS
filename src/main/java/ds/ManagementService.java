@@ -106,24 +106,24 @@ public class ManagementService {
         }
     }
 
-    // Send GET request via client
-    public void sendGetRequest(int clientId, int nodeId, int key) {
-        ActorRef client = clients.get(clientId);
-        if (client != null) {
-            client.tell(new Client.GetRequest(nodeId, key), ActorRef.noSender());
-        } else {
-            System.out.println("Client " + clientId + " not found");
-        }
+    // Get client actor reference by ID
+    public ActorRef getClient(int clientId) {
+        return clients.get(clientId);
     }
 
-    // Send UPDATE request via client
-    public void sendUpdateRequest(int clientId, int nodeId, int key, String value) {
-        ActorRef client = clients.get(clientId);
-        if (client != null) {
-            client.tell(new Client.UpdateRequest(nodeId, key, value), ActorRef.noSender());
-        } else {
-            System.out.println("Client " + clientId + " not found");
-        }
+    // Get node actor reference by ID
+    public ActorRef getNode(int nodeId) {
+        return nodes.get(nodeId);
+    }
+
+    // Get all nodes
+    public Map<Integer, ActorRef> getNodes() {
+        return nodes;
+    }
+
+    // Get all clients
+    public Map<Integer, ActorRef> getClients() {
+        return clients;
     }
 
     // Check if node exists

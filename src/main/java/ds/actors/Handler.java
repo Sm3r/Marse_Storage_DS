@@ -24,6 +24,8 @@ public class Handler extends AbstractActor {
     private final int data_key;
     private final String newValue;
     private final Delayer delayer;
+    private final boolean coordinatorIsReplica;
+    private int responsesReceived = 0;
 
     // Constructor
     public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, Delayer delayer) {
@@ -34,6 +36,7 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = null;
         this.delayer = delayer;
+        this.coordinatorIsReplica = !quorum.isEmpty();
         scheduleTimeout();
         sendReadDataRequests(key);
     }
@@ -46,6 +49,8 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = value;
         this.delayer = delayer;
+        this.coordinatorIsReplica = !quorum.isEmpty();
+        log.info("Handler[{}]: Created for UPDATE operation on key {} with {} replica nodes (coordinator is replica: {})", op_id, key, nodes.size(), coordinatorIsReplica);
         scheduleTimeout();
         sendReadDataRequests(key);
     }
@@ -84,20 +89,35 @@ public class Handler extends AbstractActor {
     }
 
     private void handleReadDataResponse(ReadDataResponse msg) {
+        responsesReceived++;
+        log.info("Handler[{}]: Received ReadDataResponse (value={}, responses={}/{})", op_id, msg.value(), responsesReceived, nodes.size());
         if (msg.value() != null) {
             quorum.add(msg.value());
         }
-        if (quorum.size() >= (newValue == null ? Settings.R : Settings.W)) {
+        
+        int requiredQuorum = (newValue == null ? Settings.R : Settings.W);
+        if (responsesReceived >= requiredQuorum) {
             if (newValue == null) {
+                // GET operation
                 String latestValue = getLatestValue();
                 log.info("Handler[{}]: Read quorum achieved. Latest value: {}", op_id, latestValue);
                 coordinator.tell(new Result(op_id, new DataItem(latestValue, getLatestVersion())), getSelf());
             } else {
-                log.info("Handler[{}]: Read quorum achieved for update operation.", op_id);
+                // UPDATE operation
+                log.info("Handler[{}]: Write quorum of responses achieved for update operation.", op_id);
                 long latestVersion = getLatestVersion();
+                DataItem updatedItem = new DataItem(newValue, latestVersion + 1);
+                
+                // Send write requests to all replica nodes
                 for (ActorRef node : nodes) {
-                    node.tell(new WriteDataRequest(data_key, new DataItem(newValue, latestVersion + 1)), getSelf());
+                    node.tell(new WriteDataRequest(data_key, updatedItem), getSelf());
                 }
+                
+                // If coordinator is also a replica, update its data too
+                if (coordinatorIsReplica) {
+                    coordinator.tell(new WriteDataRequest(data_key, updatedItem), getSelf());
+                }
+                
                 coordinator.tell(new Result(op_id, new DataItem("UPDATE_SUCCESS", latestVersion + 1)), getSelf());
             }
             getContext().stop(getSelf());
