@@ -51,11 +51,27 @@ public class Client extends AbstractActor {
         }
     }
 
+    // Handle Result response from node
+    private void handleResult(ds.model.Types.Result msg) {
+        if (msg.value() != null) {
+            String output = String.format("Client[%d]: Received result for operation %d - Value: '%s' (version: %d)", 
+                id, msg.op_id(), msg.value().value(), msg.value().version());
+            log.info(output);
+            System.out.println(output);
+        } else {
+            String output = String.format("Client[%d]: Received result for operation %d - Operation failed (timeout or error)", 
+                id, msg.op_id());
+            log.warning(output);
+            System.out.println(output);
+        }
+    }
+
     @Override
     public Receive createReceive() {
         return receiveBuilder()
                 .match(GetRequest.class, this::handleGetRequest)
                 .match(UpdateRequest.class, this::handleUpdateRequest)
+                .match(ds.model.Types.Result.class, this::handleResult)
                 .build();
     }
 }

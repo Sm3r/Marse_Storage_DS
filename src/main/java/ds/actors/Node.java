@@ -89,13 +89,15 @@ public class Node extends AbstractActor {
         return peers.get(neighborId);
     }
 
-    private void prepareReplicasAndQuorum(int key, ArrayList<ActorRef> nodeRefs, ArrayList<DataItem> quorum) {
+    private boolean prepareReplicasAndQuorum(int key, ArrayList<ActorRef> nodeRefs, ArrayList<DataItem> quorum) {
         List<Integer> nodeIds = new ArrayList<>(peers.keySet());
         nodeIds.add(id);
         List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
+        boolean coordinatorIsReplica = false;
         
         for (Integer nodeId : replicaIds) {
             if (nodeId == id) {
+                coordinatorIsReplica = true;
                 DataItem localData = data.get(key);
                 if (localData != null) {
                     quorum.add(localData);
@@ -104,6 +106,7 @@ public class Node extends AbstractActor {
                 nodeRefs.add(peers.get(nodeId));
             }
         }
+        return coordinatorIsReplica;
     }
 
     private int generateOperationId() {
@@ -116,11 +119,11 @@ public class Node extends AbstractActor {
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
-        prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
+        boolean coordinatorIsReplica = prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.GET, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), delayer));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), coordinatorIsReplica, delayer));
     }
     
     private void handleClientUpdateRequest(ClientUpdateRequest msg) {
@@ -128,11 +131,11 @@ public class Node extends AbstractActor {
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
-        prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
+        boolean coordinatorIsReplica = prepareReplicasAndQuorum(msg.key(), nodeRefs, quorum);
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), delayer));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), coordinatorIsReplica, delayer));
     }
 
     private void handleReadDataRequest(ReadDataRequest msg) {
@@ -190,6 +193,26 @@ public class Node extends AbstractActor {
         if (!peers.containsKey(msg.id()) && msg.id() != this.id) {
             peers.put(msg.id(), msg.peer());
             log.info("Node[{}]: Added new peer Node[{}]", id, msg.id());
+            
+            // Check if we need to drop any data we're no longer responsible for
+            List<Integer> keysToRemove = new ArrayList<>();
+            for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
+                int key = entry.getKey();
+                List<Integer> nodeIds = new ArrayList<>(peers.keySet());
+                nodeIds.add(this.id);
+                List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
+                
+                // If this node is no longer in the replica set for this key, remove it
+                if (!replicaIds.contains(this.id)) {
+                    keysToRemove.add(key);
+                    log.info("Node[{}]: Dropping key {} (no longer responsible, new replicas: {})", id, key, replicaIds);
+                }
+            }
+            
+            // Remove the keys we're no longer responsible for
+            for (Integer key : keysToRemove) {
+                data.remove(key);
+            }
         } else {
             log.warning("Node[{}]: Peer Node[{}] already exists", id, msg.id());
         }
@@ -231,10 +254,10 @@ public class Node extends AbstractActor {
                 int key = entry.getKey();
                 ArrayList<ActorRef> nodeRefs = new ArrayList<>();
                 ArrayList<DataItem> quorum = new ArrayList<>();
-                prepareReplicasAndQuorum(key, nodeRefs, quorum);
+                boolean coordinatorIsReplica = prepareReplicasAndQuorum(key, nodeRefs, quorum);
                 int op_id = generateOperationId();
                 requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
-                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, delayer));
+                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer));
                 log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
             }
         }

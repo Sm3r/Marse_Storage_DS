@@ -92,7 +92,7 @@ public class Main {
         System.out.println("8. Wait for Processing");
         System.out.println("9. Exit");
         System.out.println("=".repeat(50));
-        System.out.print("Enter choice: ");
+        System.out.println("Enter choice: ");
         System.out.flush();
     }
     
@@ -107,7 +107,7 @@ public class Main {
         System.out.print("Enter node ID to remove: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         service.removeNode(nodeId);
-        service.waitForProcessing(500);
+        service.waitForProcessing(1000);
     }
     
     private static void updateValue(Scanner scanner, ManagementService service) {
@@ -165,9 +165,12 @@ public class Main {
     
     private static void printAllNodes(ManagementService service) {
         System.out.println("\nActive nodes: " + service.getNodes().keySet());
-        for (Integer nodeId : service.getNodes().keySet()) {
-            service.printNode(nodeId);
-        }
+        service.getNodes().keySet().stream()
+            .sorted()
+            .forEach(nodeId -> {
+                service.printNode(nodeId);
+                service.waitForProcessing(150);
+            });
     }
     
     private static void waitForProcessing(Scanner scanner, ManagementService service) {

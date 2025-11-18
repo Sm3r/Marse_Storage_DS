@@ -49,18 +49,28 @@ public class ManagementService {
 
         // Create initial nodes
         addNode(10);
-        waitForProcessing(1000);
+        waitForProcessing(500);
         addNode(20);
-        waitForProcessing(1000);
+        waitForProcessing(500);
         addNode(30);
-        waitForProcessing(1000);
+        waitForProcessing(500);
         addNode(40);
-        waitForProcessing(1000);
+        waitForProcessing(500);
         addNode(50);
+        waitForProcessing(500);
 
         // Create client actor
         clients.put(1, system.actorOf(Props.create(Client.class, () -> new Client(1, nodes, delayer))));
         clients.put(2, system.actorOf(Props.create(Client.class, () -> new Client(2, nodes, delayer))));
+        
+        // Add some initial data values
+        ActorRef client1 = clients.get(1);
+        client1.tell(new Client.UpdateRequest(10, 5, "cat"), ActorRef.noSender());
+        waitForProcessing(500);
+        client1.tell(new Client.UpdateRequest(20, 25, "dog"), ActorRef.noSender());
+        waitForProcessing(500);
+        client1.tell(new Client.UpdateRequest(30, 45, "frog"), ActorRef.noSender());
+        waitForProcessing(500);
     }
 
     // Add a new node to the system

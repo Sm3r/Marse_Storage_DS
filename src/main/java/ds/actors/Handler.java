@@ -28,7 +28,7 @@ public class Handler extends AbstractActor {
     private int responsesReceived = 0;
 
     // Constructor
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, Delayer delayer) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, boolean coordinatorIsReplica, Delayer delayer) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
@@ -36,12 +36,12 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = null;
         this.delayer = delayer;
-        this.coordinatorIsReplica = !quorum.isEmpty();
+        this.coordinatorIsReplica = coordinatorIsReplica;
         scheduleTimeout();
         sendReadDataRequests(key);
     }
 
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value, Delayer delayer) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value, boolean coordinatorIsReplica, Delayer delayer) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
@@ -49,7 +49,7 @@ public class Handler extends AbstractActor {
         this.data_key = key;
         this.newValue = value;
         this.delayer = delayer;
-        this.coordinatorIsReplica = !quorum.isEmpty();
+        this.coordinatorIsReplica = coordinatorIsReplica;
         log.info("Handler[{}]: Created for UPDATE operation on key {} with {} replica nodes (coordinator is replica: {})", op_id, key, nodes.size(), coordinatorIsReplica);
         scheduleTimeout();
         sendReadDataRequests(key);
