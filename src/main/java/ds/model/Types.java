@@ -45,9 +45,19 @@ public class Types {
     
     public record OperationTimeout() {}
 
+    // ==================== Crashing operation ====================
+    public record Crash() {}
+    public record Recover(ActorRef nodeRef) {}
+    public record RequestTopology() {}
+    public record TopologyResponse(Map<Integer, ActorRef> peers) {}
+
     // ==================== Joining operation ====================
     public record JoinRequest(int nodeId, ActorRef nodeRef) {}
     public record RegisterPeers(Map<Integer, ActorRef> peers) {}
     public record GetAllDataItems(int nodeId) {}
     public record SendAllDataItems(Map<Integer, DataItem> dataItems) {}
+
+
+    // ==================== Leaving operation ====================
+   
 }

@@ -157,6 +157,40 @@ public class Node extends AbstractActor {
         }
     }
 
+    // ====================== Crash/Recover operation handlers ====================
+    private void handleCrash(Crash msg) {
+        log.warning("Node[{}]: Crashing as per request", id);
+        getContext().become(crashed());
+    }
+
+    private void handleRecover(Recover msg) {
+        log.info("Node[{}]: Recovering from crash", id);
+        delayer.delayedMsg(msg.nodeRef(), new Types.RequestTopology(), getSelf());
+    }
+
+    private void handleTopologyResponse(TopologyResponse msg) {
+        this.peers.putAll(msg.peers());
+        
+        log.info("Node[{}]: Received topology with {} peers, updating data responsibilities", id, peers.size());
+        
+        List<Integer> keysToRemove = new ArrayList<>();
+        for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
+            int key = entry.getKey();
+            List<Integer> nodeIds = new ArrayList<>(peers.keySet());
+            nodeIds.add(this.id);
+            List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
+            
+            if (!replicaIds.contains(this.id)) {
+                keysToRemove.add(key);
+                log.info("Node[{}]: Dropping key {} after recovery (no longer responsible, new replicas: {})", id, key, replicaIds);
+            }
+        }
+        for (Integer key : keysToRemove) {
+            data.remove(key);
+        }
+        getContext().become(ready());
+    }
+
     // ====================== Joining operation handlers ====================
 
     // === Handle join request from a new node ====
@@ -337,12 +371,21 @@ public class Node extends AbstractActor {
                 .match(ReadDataRequest.class, this::handleReadDataRequest)
                 .match(WriteDataRequest.class, this::handleWriteDataRequest)
                 .match(Result.class, this::handleOperationResult)
+                .match(Crash.class, this::handleCrash)
                 .match(JoinRequest.class, this::handleJoinRequest)
                 .match(GetAllDataItems.class, this::handleGetAllDataItems)
                 .match(AddPeer.class, this::handleAddPeer)
                 .match(Print.class, this::print)
                 .match(PrintPeers.class, this::printPeers)
                 .matchAny(msg -> log.warning("Node[{}]: Received unknown message: {}", id, msg.getClass().getSimpleName()))
+                .build();
+    }
+
+    private Receive crashed() {
+        return receiveBuilder()
+                .match(Recover.class, this::handleRecover)
+                .match(TopologyResponse.class, this::handleTopologyResponse)
+                .matchAny(msg -> log.warning("Node[{}]: Node is crashed. Ignoring message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }
 }
