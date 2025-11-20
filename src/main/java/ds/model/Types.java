@@ -48,7 +48,7 @@ public class Types {
     // ==================== Crashing operation ====================
     public record Crash() {}
     public record Recover(ActorRef nodeRef) {}
-    public record RequestTopology() {}
+    public record TopologyRequest() {}
     public record TopologyResponse(Map<Integer, ActorRef> peers) {}
 
     // ==================== Joining operation ====================
@@ -59,5 +59,8 @@ public class Types {
 
 
     // ==================== Leaving operation ====================
-   
+    public record Leave() {}
+    public record AckRequest() {}
+    public record AckResponse(int nodeId) {}
+    public record LeaveNotify(int nodeId) {}
 }

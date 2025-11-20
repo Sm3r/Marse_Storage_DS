@@ -19,6 +19,7 @@ public class ManagementService {
     private final Delayer delayer;
     private final Map<Integer, ActorRef> nodes;
     private final Map<Integer, ActorRef> clients;
+    private final Map<Integer, ActorRef> crashedNodes;
 
     // =============== Constructor ====================
     public ManagementService() {
@@ -26,6 +27,7 @@ public class ManagementService {
         this.delayer = new Delayer(system);
         this.nodes = new TreeMap<>();
         this.clients = new TreeMap<>();
+        this.crashedNodes = new TreeMap<>();
     }
 
     // ================ Utility Functions ====================
@@ -99,7 +101,19 @@ public class ManagementService {
     // Send print message to a node
     public void printNode(int nodeId) {
         ActorRef node = nodes.get(nodeId);
+        boolean isCrashed = false;
+        
+        if (node == null) {
+            node = crashedNodes.get(nodeId);
+            isCrashed = true;
+        }
+        
         if (node != null) {
+            if (isCrashed) {
+                System.out.print("X ");
+            } else {
+                System.out.print("  ");
+            }
             delayer.delayedMsg(node, new Print(), ActorRef.noSender());
         } else {
             System.out.println("Node " + nodeId + " not found");
@@ -136,9 +150,14 @@ public class ManagementService {
         return clients;
     }
 
+    // Get all crashed nodes
+    public Map<Integer, ActorRef> getCrashedNodes() {
+        return crashedNodes;
+    }
+
     // Check if node exists
     public boolean nodeExists(int nodeId) {
-        return nodes.containsKey(nodeId);
+        return nodes.containsKey(nodeId) || crashedNodes.containsKey(nodeId);
     }
 
     // Wait for messages to be processed
@@ -147,6 +166,56 @@ public class ManagementService {
             Thread.sleep(milliseconds);
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+    }
+
+    // Crash a node
+    public void crashNode(int nodeId) {
+        ActorRef node = nodes.get(nodeId);
+        if (node != null) {
+            delayer.delayedMsg(node, new Crash(), ActorRef.noSender());
+            // Move node from active to crashed list
+            nodes.remove(nodeId);
+            crashedNodes.put(nodeId, node);
+            System.out.println("Crash signal sent to node " + nodeId);
+        } else {
+            System.out.println("Node " + nodeId + " not found");
+        }
+    }
+
+    // Recover a crashed node
+    public void recoverNode(int nodeId, int peerNodeId) {
+        ActorRef node = crashedNodes.get(nodeId);
+        ActorRef peerNode = nodes.get(peerNodeId);
+        
+        if (node == null) {
+            System.out.println("Node " + nodeId + " not found in crashed nodes");
+            return;
+        }
+        
+        if (peerNode == null) {
+            System.out.println("Peer node " + peerNodeId + " not found");
+            return;
+        }
+        
+        delayer.delayedMsg(node, new Recover(peerNode), ActorRef.noSender());
+        // Move node back from crashed to active list
+        crashedNodes.remove(nodeId);
+        nodes.put(nodeId, node);
+        System.out.println("Recovery signal sent to node " + nodeId + " to contact node " + peerNodeId);
+    }
+
+    // Gracefully leave the network
+    public void leaveNetwork(int nodeId) {
+        ActorRef node = nodes.get(nodeId);
+        if (node != null) {
+            delayer.delayedMsg(node, new Leave(), ActorRef.noSender());
+            System.out.println("Leave signal sent to node " + nodeId);
+            // Remove from our tracking map after sending leave signal
+            // The node will stop itself after completing the leave protocol
+            nodes.remove(nodeId);
+        } else {
+            System.out.println("Node " + nodeId + " not found");
         }
     }
 

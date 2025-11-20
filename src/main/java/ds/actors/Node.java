@@ -10,14 +10,17 @@ import ds.config.Settings;
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 import akka.actor.ActorRef;
+import akka.actor.Cancellable;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
+import scala.concurrent.duration.Duration;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 // Node actor
 public class Node extends AbstractActor {
@@ -29,6 +32,8 @@ public class Node extends AbstractActor {
     private final Map<Integer, DataItem> data;
     private final Map<Integer, ActorRef> peers;
     private final Map<Integer, Request> requestsLedger;
+    private int responseReceived = 0;
+    private Cancellable leaveTimeout = null;
 
     // Constructors
     public Node(int id, ActorRef bootstrapper, Delayer delayer) {
@@ -73,20 +78,39 @@ public class Node extends AbstractActor {
     }
 
     private ActorRef getClockwiseNeighbor() {
+        List<ActorRef> neighbors = getClockwiseNeighbors(1);
+        return neighbors.isEmpty() ? null : neighbors.get(0);
+    }
 
+    private List<ActorRef> getClockwiseNeighbors(Integer n) {
+        List<ActorRef> neighbors = new ArrayList<>();
         List<Integer> allNodeIds = new ArrayList<>(peers.keySet());
         allNodeIds.add(id);
         Collections.sort(allNodeIds);
         
-        int n = allNodeIds.size();
-        if (n <= 1) {
-            return null;
+        int totalNodes = allNodeIds.size();
+        if (totalNodes <= 1) {
+            return neighbors;
         }
-        int currentIndex = allNodeIds.indexOf(id);
-        int neighborIndex = (currentIndex + 1) % n;
-        int neighborId = allNodeIds.get(neighborIndex);
         
-        return peers.get(neighborId);
+        // If n is null, use Settings.N
+        int count = (n != null) ? n : Settings.N;
+        
+        // Limit count to available nodes (excluding self)
+        count = Math.min(count, totalNodes - 1);
+        
+        int currentIndex = allNodeIds.indexOf(id);
+        
+        for (int i = 1; i <= count; i++) {
+            int neighborIndex = (currentIndex + i) % totalNodes;
+            int neighborId = allNodeIds.get(neighborIndex);
+            ActorRef neighborRef = peers.get(neighborId);
+            if (neighborRef != null) {
+                neighbors.add(neighborRef);
+            }
+        }
+        
+        return neighbors;
     }
 
     private boolean prepareReplicasAndQuorum(int key, ArrayList<ActorRef> nodeRefs, ArrayList<DataItem> quorum) {
@@ -165,7 +189,14 @@ public class Node extends AbstractActor {
 
     private void handleRecover(Recover msg) {
         log.info("Node[{}]: Recovering from crash", id);
-        delayer.delayedMsg(msg.nodeRef(), new Types.RequestTopology(), getSelf());
+        delayer.delayedMsg(msg.nodeRef(), new Types.TopologyRequest(), getSelf());
+    }
+
+    private void handleTopologyRequest(TopologyRequest msg) {
+        log.info("Node[{}]: Received topology request, sending topology response", id);
+        HashMap<Integer, ActorRef> topology = new HashMap<>(this.peers);
+        topology.put(this.id, getSelf());
+        getSender().tell(new TopologyResponse(new HashMap<>(topology)), getSelf());
     }
 
     private void handleTopologyResponse(TopologyResponse msg) {
@@ -334,11 +365,99 @@ public class Node extends AbstractActor {
         }
     }
 
+    // ======================= Leaving operation handlers ====================
+    private void handleLeave(Leave msg) {
+        log.debug("Node[{}]: Received leave request, notifying peers", id);
+        List<ActorRef> clockwiseNeighbors = getClockwiseNeighbors(Settings.N);
+        for (ActorRef neighbor : clockwiseNeighbors) {
+            delayer.delayedMsg(neighbor, new AckRequest(), getSelf());
+        }
+        
+        // Schedule timeout for leave operation (2000ms)
+        leaveTimeout = getContext().getSystem().scheduler().scheduleOnce(
+            Duration.create(2000, TimeUnit.MILLISECONDS),
+            getSelf(),
+            new OperationTimeout(),
+            getContext().getSystem().dispatcher(),
+            getSelf()
+        );
+        log.debug("Node[{}]: Leave timeout scheduled for 2000ms", id);
+    }
+
+    private void handleAckRequest(AckRequest msg) {
+        log.debug("Node[{}]: Received AckRequest, sending AckResponse", id);
+        delayer.delayedMsg(getSender(), new AckResponse(id), getSelf());
+    }
+
+    private void handleAckResponse(AckResponse msg) {
+        responseReceived++;
+        log.debug("Node[{}]: Received AckResponse from Node[{}] (total acks: {})", id, msg.nodeId(), responseReceived);
+        if (responseReceived == Settings.N) {
+            // Cancel the timeout since we received all acks
+            if (leaveTimeout != null && !leaveTimeout.isCancelled()) {
+                leaveTimeout.cancel();
+                log.debug("Node[{}]: Leave timeout cancelled - all acks received", id);
+            }
+            
+            List<ActorRef> clockwiseNeighbors = getClockwiseNeighbors(Settings.N);
+            for (ActorRef neighbor : clockwiseNeighbors) {
+                for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
+                    int key = entry.getKey();
+                    DataItem value = entry.getValue();
+                    List<Integer> nodeIds = new ArrayList<>(peers.keySet());
+                    nodeIds.add(this.id);
+                    List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
+                    if (replicaIds.contains(msg.nodeId())) {
+                        delayer.delayedMsg(neighbor, new WriteDataRequest(key, value), getSelf());
+                        log.debug("Node[{}]: Sending key {} to Node[{}] before leaving (replicas: {})", id, key, msg.nodeId(), replicaIds);
+                    }
+                }
+            }
+            for (ActorRef peer : peers.values()) {
+                delayer.delayedMsg(peer, new LeaveNotify(id), getSelf());
+            }
+            log.info("Node[{}]: Received all AckResponses, leaving the network", id);
+            getContext().stop(getSelf());
+        }
+    }
+
+    private void handleLeaveNotify(LeaveNotify msg) {
+        log.info("Node[{}]: Received leave notification from Node[{}], removing from peers", id, msg.nodeId());
+        peers.remove(msg.nodeId());
+    }
+
+    private void handleOperationTimeout(OperationTimeout msg) {
+        // Check if this timeout is for a leave operation
+        if (leaveTimeout != null) {
+            log.warning("Node[{}]: Leave operation timeout - only received {} of {} required acks, aborting leave", 
+                        id, responseReceived, Settings.N);
+            // Reset state and abort the leave operation
+            responseReceived = 0;
+            leaveTimeout = null;
+        }
+    }
     
 
     // ====================== Utility Messages ====================
+    private String formatDataStore() {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
+            if (!first) sb.append(", ");
+            first = false;
+            sb.append(entry.getKey())
+              .append("=[")
+              .append(entry.getValue().value())
+              .append(", v=")
+              .append(entry.getValue().version())
+              .append("]");
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+    
     private void print(Print msg) {
-        String output = String.format("Node[%d]: Data store content: %s", id, data);
+        String output = String.format("Node[%d]: Data: %s", id, formatDataStore());
         log.info(output);
         System.out.println(output);
     }
@@ -366,15 +485,26 @@ public class Node extends AbstractActor {
     
     private Receive ready() {
         return receiveBuilder()
+                // GET/UPDATE operation handlers
                 .match(ClientGetRequest.class, this::handleClientGetRequest)
                 .match(ClientUpdateRequest.class, this::handleClientUpdateRequest)
                 .match(ReadDataRequest.class, this::handleReadDataRequest)
                 .match(WriteDataRequest.class, this::handleWriteDataRequest)
                 .match(Result.class, this::handleOperationResult)
+                // Crash/Recover handlers
                 .match(Crash.class, this::handleCrash)
+                .match(TopologyRequest.class, this::handleTopologyRequest)
+                // Joining operation handlers
                 .match(JoinRequest.class, this::handleJoinRequest)
                 .match(GetAllDataItems.class, this::handleGetAllDataItems)
                 .match(AddPeer.class, this::handleAddPeer)
+                // Leaving operation handlers
+                .match(Leave.class, this::handleLeave)
+                .match(AckRequest.class, this::handleAckRequest)
+                .match(AckResponse.class, this::handleAckResponse)
+                .match(LeaveNotify.class, this::handleLeaveNotify)
+                .match(OperationTimeout.class, this::handleOperationTimeout)
+                // Utility messages
                 .match(Print.class, this::print)
                 .match(PrintPeers.class, this::printPeers)
                 .matchAny(msg -> log.warning("Node[{}]: Received unknown message: {}", id, msg.getClass().getSimpleName()))
@@ -385,6 +515,7 @@ public class Node extends AbstractActor {
         return receiveBuilder()
                 .match(Recover.class, this::handleRecover)
                 .match(TopologyResponse.class, this::handleTopologyResponse)
+                .match(Print.class, this::print)
                 .matchAny(msg -> log.warning("Node[{}]: Node is crashed. Ignoring message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }
