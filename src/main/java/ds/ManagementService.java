@@ -114,7 +114,7 @@ public class ManagementService {
             } else {
                 System.out.print("  ");
             }
-            delayer.delayedMsg(node, new Print(), ActorRef.noSender());
+            delayer.delayedMsg(ActorRef.noSender(), new Print(), node);
         } else {
             System.out.println("Node " + nodeId + " not found");
         }
@@ -124,7 +124,7 @@ public class ManagementService {
     public void printPeers(int nodeId) {
         ActorRef node = nodes.get(nodeId);
         if (node != null) {
-            delayer.delayedMsg(node, new PrintPeers(), ActorRef.noSender());
+            delayer.delayedMsg(ActorRef.noSender(), new PrintPeers(), node);
         } else {
             System.out.println("Node " + nodeId + " not found");
         }
@@ -173,7 +173,7 @@ public class ManagementService {
     public void crashNode(int nodeId) {
         ActorRef node = nodes.get(nodeId);
         if (node != null) {
-            delayer.delayedMsg(node, new Crash(), ActorRef.noSender());
+            delayer.delayedMsg(ActorRef.noSender(), new Crash(), node);
             // Move node from active to crashed list
             nodes.remove(nodeId);
             crashedNodes.put(nodeId, node);
@@ -198,7 +198,7 @@ public class ManagementService {
             return;
         }
         
-        delayer.delayedMsg(node, new Recover(peerNode), ActorRef.noSender());
+        delayer.delayedMsg(ActorRef.noSender(), new Recover(peerNode), node);
         // Move node back from crashed to active list
         crashedNodes.remove(nodeId);
         nodes.put(nodeId, node);
@@ -209,7 +209,7 @@ public class ManagementService {
     public void leaveNetwork(int nodeId) {
         ActorRef node = nodes.get(nodeId);
         if (node != null) {
-            delayer.delayedMsg(node, new Leave(), ActorRef.noSender());
+            delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
             System.out.println("Leave signal sent to node " + nodeId);
             // Remove from our tracking map after sending leave signal
             // The node will stop itself after completing the leave protocol

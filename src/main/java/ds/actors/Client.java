@@ -34,7 +34,7 @@ public class Client extends AbstractActor {
         ActorRef node = nodes.get(msg.nodeId());
         if (node != null) {
             log.info("Client[{}]: Sending GET request for key {} to node {}", id, msg.key(), msg.nodeId());
-            delayer.delayedMsg(node, new ds.model.Types.ClientGetRequest(msg.key()), getSelf());
+            delayer.delayedMsg(getSelf(), new ds.model.Types.ClientGetRequest(msg.key()), node);
         } else {
             log.warning("Client[{}]: Node {} not found for GET request", id, msg.nodeId());
         }
@@ -45,7 +45,7 @@ public class Client extends AbstractActor {
         ActorRef node = nodes.get(msg.nodeId());
         if (node != null) {
             log.info("Client[{}]: Sending UPDATE request for key {} with value '{}' to node {}", id, msg.key(), msg.value(), msg.nodeId());
-            delayer.delayedMsg(node, new ds.model.Types.ClientUpdateRequest(msg.key(), msg.value()), getSelf());
+            delayer.delayedMsg(getSelf(), new ds.model.Types.ClientUpdateRequest(msg.key(), msg.value()), node);
         } else {
             log.warning("Client[{}]: Node {} not found for UPDATE request", id, msg.nodeId());
         }

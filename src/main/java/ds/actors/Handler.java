@@ -68,7 +68,7 @@ public class Handler extends AbstractActor {
     
     private void sendReadDataRequests(int id) {
         for (ActorRef node : nodes) {
-            delayer.delayedMsg(node, new ReadDataRequest(id), getSelf());
+            delayer.delayedMsg(getSelf(), new ReadDataRequest(id), node);
         }
     }
 
@@ -110,12 +110,12 @@ public class Handler extends AbstractActor {
                 
                 // Send write requests to all replica nodes
                 for (ActorRef node : nodes) {
-                    node.tell(new WriteDataRequest(data_key, updatedItem), getSelf());
+                    delayer.delayedMsg(getSelf(), new WriteDataRequest(data_key, updatedItem), node);
                 }
                 
                 // If coordinator is also a replica, update its data too
                 if (coordinatorIsReplica) {
-                    coordinator.tell(new WriteDataRequest(data_key, updatedItem), getSelf());
+                    delayer.delayedMsg(getSelf(), new WriteDataRequest(data_key, updatedItem), coordinator);
                 }
                 
                 coordinator.tell(new Result(op_id, new DataItem("UPDATE_SUCCESS", latestVersion + 1)), getSelf());

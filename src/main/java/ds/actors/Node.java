@@ -46,7 +46,7 @@ public class Node extends AbstractActor {
         if (!getSelf().equals(bootstrapper) && bootstrapper != null) {
             // Node is joining an existing network
             log.info("Node[{}]: Starting in joining state, contacting bootstrapper", id);
-            getContext().actorSelection(bootstrapper.path()).tell(new JoinRequest(id, getSelf()), getSelf());
+            delayer.delayedMsg(getSelf(), new JoinRequest(id, getSelf()), bootstrapper);
         } else {
             // This is the first node
             log.info("Node[{}]: Starting node, transitioning to ready state", id);
@@ -165,7 +165,7 @@ public class Node extends AbstractActor {
     private void handleReadDataRequest(ReadDataRequest msg) {
         log.info("Node[{}]: Handling read data request for key {}", id, msg.key());
         DataItem value = data.get(msg.key());
-        getSender().tell(new ReadDataResponse(value), getSelf());
+        delayer.delayedMsg(getSelf(), new ReadDataResponse(value), getSender());
     }
 
     private void handleWriteDataRequest(WriteDataRequest msg) {
@@ -177,7 +177,7 @@ public class Node extends AbstractActor {
         log.debug("Node[{}]: Received operation result for operation {}", id, msg.op_id());
         Request request = requestsLedger.get(msg.op_id());
         if (request != null) {
-            delayer.delayedMsg(request.getRequester(), msg, getSelf());
+            delayer.delayedMsg(getSelf(), msg, request.getRequester());
         }
     }
 
@@ -189,14 +189,14 @@ public class Node extends AbstractActor {
 
     private void handleRecover(Recover msg) {
         log.info("Node[{}]: Recovering from crash", id);
-        delayer.delayedMsg(msg.nodeRef(), new Types.TopologyRequest(), getSelf());
+        delayer.delayedMsg(getSelf(), new Types.TopologyRequest(), msg.nodeRef());
     }
 
     private void handleTopologyRequest(TopologyRequest msg) {
         log.info("Node[{}]: Received topology request, sending topology response", id);
         HashMap<Integer, ActorRef> topology = new HashMap<>(this.peers);
         topology.put(this.id, getSelf());
-        getSender().tell(new TopologyResponse(new HashMap<>(topology)), getSelf());
+        delayer.delayedMsg(getSelf(), new TopologyResponse(new HashMap<>(topology)), getSender());
     }
 
     private void handleTopologyResponse(TopologyResponse msg) {
@@ -224,15 +224,29 @@ public class Node extends AbstractActor {
 
     // ====================== Joining operation handlers ====================
 
-    // === Handle join request from a new node ====
     private void handleJoinRequest(JoinRequest msg) {
         log.info("Node[{}]: Received join request from Node[{}]", id, msg.nodeId());
         if (!peers.containsKey(msg.nodeId())) {
             Map<Integer, ActorRef> nodes = new HashMap<>(peers);
             nodes.put(this.id, getSelf());
-            msg.nodeRef().tell(new Types.RegisterPeers(nodes), getSelf());
+            delayer.delayedMsg(getSelf(), new Types.RegisterPeers(nodes), msg.nodeRef());
         } else {
             log.warning("Node[{}]: Node[{}] is already a peer.", id, msg.nodeId());
+        }
+    }
+
+    private void handleRegisterPeers(RegisterPeers msg) {
+        this.peers.putAll(msg.peers());
+        log.info("Node[{}]: Current peers after registration: {}", id, peers.keySet());
+
+        ActorRef clockwiseNeighbor = getClockwiseNeighbor();
+        if (clockwiseNeighbor != null) {
+            delayer.delayedMsg(getSelf(), new GetAllDataItems(id), clockwiseNeighbor);
+            log.info("Node[{}]: Waiting for data items from clockwise neighbor before transitioning to ready state", id);
+        } else {
+            // No clockwise neighbor, so no data to receive - transition immediately
+            log.info("Node[{}]: No clockwise neighbor found, transitioning to ready state", id);
+            getContext().become(ready());
         }
     }
 
@@ -251,7 +265,35 @@ public class Node extends AbstractActor {
                 log.debug("Node[{}]: Including key {} for Node[{}] (replicas: {})", id, key, msg.nodeId(), replicaIds);
             }
         }
-        getSender().tell(new Types.SendAllDataItems(dataItems), getSelf());
+        delayer.delayedMsg(getSelf(), new Types.SendAllDataItems(dataItems), getSender());
+    }
+
+    private void handleSendAllDataItems(SendAllDataItems msg) {
+        log.info("Node[{}]: Received {} data items from clockwise neighbor", id, msg.dataItems().size());
+        this.data.putAll(msg.dataItems());
+        
+        if (msg.dataItems().isEmpty()) {
+            // No data items to sync, transition to ready state immediately
+            log.info("Node[{}]: No data items to sync, transitioning to ready state", id);
+            getContext().become(ready());
+            
+            // Notify all peers to add this node
+            for (ActorRef peer : peers.values()) {
+                delayer.delayedMsg(getSelf(), new AddPeer(id, getSelf()), peer);
+            }
+        } else {
+            // Spawn handlers to sync data items
+            for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
+                int key = entry.getKey();
+                ArrayList<ActorRef> nodeRefs = new ArrayList<>();
+                ArrayList<DataItem> quorum = new ArrayList<>();
+                boolean coordinatorIsReplica = prepareReplicasAndQuorum(key, nodeRefs, quorum);
+                int op_id = generateOperationId();
+                requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
+                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer));
+                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
+            }
+        }
     }
 
     private void handleAddPeer(AddPeer msg) {
@@ -274,57 +316,11 @@ public class Node extends AbstractActor {
                 }
             }
             
-            // Remove the keys we're no longer responsible for
             for (Integer key : keysToRemove) {
                 data.remove(key);
             }
         } else {
             log.warning("Node[{}]: Peer Node[{}] already exists", id, msg.id());
-        }
-    }
-
-
-    // === Handle registration from joining node ===
-    private void handleRegisterPeers(RegisterPeers msg) {
-        this.peers.putAll(msg.peers());
-        log.info("Node[{}]: Current peers after registration: {}", id, peers.keySet());
-
-        ActorRef clockwiseNeighbor = getClockwiseNeighbor();
-        if (clockwiseNeighbor != null) {
-            clockwiseNeighbor.tell(new GetAllDataItems(id), getSelf());
-            log.info("Node[{}]: Waiting for data items from clockwise neighbor before transitioning to ready state", id);
-        } else {
-            // No clockwise neighbor, so no data to receive - transition immediately
-            log.info("Node[{}]: No clockwise neighbor found, transitioning to ready state", id);
-            getContext().become(ready());
-        }
-    }
-
-    private void handleSendAllDataItems(SendAllDataItems msg) {
-        log.info("Node[{}]: Received {} data items from clockwise neighbor", id, msg.dataItems().size());
-        this.data.putAll(msg.dataItems());
-        
-        if (msg.dataItems().isEmpty()) {
-            // No data items to sync, transition to ready state immediately
-            log.info("Node[{}]: No data items to sync, transitioning to ready state", id);
-            getContext().become(ready());
-            
-            // Notify all peers to add this node
-            for (ActorRef peer : peers.values()) {
-                peer.tell(new AddPeer(id, getSelf()), getSelf());
-            }
-        } else {
-            // Spawn handlers to sync data items
-            for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
-                int key = entry.getKey();
-                ArrayList<ActorRef> nodeRefs = new ArrayList<>();
-                ArrayList<DataItem> quorum = new ArrayList<>();
-                boolean coordinatorIsReplica = prepareReplicasAndQuorum(key, nodeRefs, quorum);
-                int op_id = generateOperationId();
-                requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
-                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer));
-                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
-            }
         }
     }
 
@@ -343,7 +339,7 @@ public class Node extends AbstractActor {
             
             // Add the result to the ledger
             request.setResult(msg);
-            delayer.delayedMsg(request.getRequester(), msg, getSelf());
+            delayer.delayedMsg(getSelf(), msg, request.getRequester());
             
             // Check if all GET_JOIN operations are completed
             boolean allJoinOpsCompleted = true;
@@ -358,7 +354,7 @@ public class Node extends AbstractActor {
             if (allJoinOpsCompleted) {
                 log.info("Node[{}]: All join operations completed, notifying peers", id);
                 for (ActorRef peer : peers.values()) {
-                    peer.tell(new AddPeer(id, getSelf()), getSelf());
+                    delayer.delayedMsg(getSelf(), new AddPeer(id, getSelf()), peer);
                 }
                 getContext().become(ready());
             }
@@ -370,7 +366,7 @@ public class Node extends AbstractActor {
         log.debug("Node[{}]: Received leave request, notifying peers", id);
         List<ActorRef> clockwiseNeighbors = getClockwiseNeighbors(Settings.N);
         for (ActorRef neighbor : clockwiseNeighbors) {
-            delayer.delayedMsg(neighbor, new AckRequest(), getSelf());
+            delayer.delayedMsg(getSelf(), new AckRequest(), neighbor);
         }
         
         // Schedule timeout for leave operation (2000ms)
@@ -386,7 +382,7 @@ public class Node extends AbstractActor {
 
     private void handleAckRequest(AckRequest msg) {
         log.debug("Node[{}]: Received AckRequest, sending AckResponse", id);
-        delayer.delayedMsg(getSender(), new AckResponse(id), getSelf());
+        delayer.delayedMsg(getSelf(), new AckResponse(id), getSender());
     }
 
     private void handleAckResponse(AckResponse msg) {
@@ -408,13 +404,13 @@ public class Node extends AbstractActor {
                     nodeIds.add(this.id);
                     List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
                     if (replicaIds.contains(msg.nodeId())) {
-                        delayer.delayedMsg(neighbor, new WriteDataRequest(key, value), getSelf());
+                        delayer.delayedMsg(getSelf(), new WriteDataRequest(key, value), neighbor);
                         log.debug("Node[{}]: Sending key {} to Node[{}] before leaving (replicas: {})", id, key, msg.nodeId(), replicaIds);
                     }
                 }
             }
             for (ActorRef peer : peers.values()) {
-                delayer.delayedMsg(peer, new LeaveNotify(id), getSelf());
+                delayer.delayedMsg(getSelf(), new LeaveNotify(id), peer);
             }
             log.info("Node[{}]: Received all AckResponses, leaving the network", id);
             getContext().stop(getSelf());

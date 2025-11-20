@@ -23,12 +23,12 @@ public class Delayer {
     }
 
     /** Normal send, no delay */
-    public void msg(ActorRef target, Object message, ActorRef sender) {
+    public void msg(ActorRef sender, Object message, ActorRef target) {
         target.tell(message, sender);
     }
 
     /** Send with Gaussian random delay */
-    public void delayedMsg(ActorRef target, Object message, ActorRef sender) {
+    public void delayedMsg(ActorRef sender, Object message, ActorRef target) {
         int delay = gaussianDelay();
         system.scheduler().scheduleOnce(
                 Duration.create(delay, TimeUnit.MILLISECONDS),
