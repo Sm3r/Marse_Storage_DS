@@ -48,16 +48,16 @@ public class Main {
                         getValue(scanner, service);
                         break;
                     case "5":
-                        printNodeState(scanner, service);
-                        break;
-                    case "6":
-                        printNodePeers(scanner, service);
-                        break;
-                    case "7":
                         printAllNodes(service);
                         break;
+                    case "6":
+                        crashNode(scanner, service);
+                        break;
+                    case "7":
+                        recoverNode(scanner, service);
+                        break;
                     case "8":
-                        waitForProcessing(scanner, service);
+                        leaveNetwork(scanner, service);
                         break;
                     case "9":
                         running = false;
@@ -86,10 +86,10 @@ public class Main {
         System.out.println("2. Remove Node");
         System.out.println("3. Update Value (via Client)");
         System.out.println("4. Get Value (via Client)");
-        System.out.println("5. Print Node State");
-        System.out.println("6. Print Node Peers");
-        System.out.println("7. Print All Nodes");
-        System.out.println("8. Wait for Processing");
+        System.out.println("5. Print All Nodes");
+        System.out.println("6. Crash Node");
+        System.out.println("7. Recover Node");
+        System.out.println("8. Leave Network (Graceful)");
         System.out.println("9. Exit");
         System.out.println("=".repeat(50));
         System.out.println("Enter choice: ");
@@ -151,33 +151,48 @@ public class Main {
         }
     }
     
-    private static void printNodeState(Scanner scanner, ManagementService service) {
-        System.out.print("Enter node ID: ");
-        int nodeId = Integer.parseInt(scanner.nextLine().trim());
-        service.printNode(nodeId);
-    }
-    
-    private static void printNodePeers(Scanner scanner, ManagementService service) {
-        System.out.print("Enter node ID: ");
-        int nodeId = Integer.parseInt(scanner.nextLine().trim());
-        service.printPeers(nodeId);
-    }
-    
     private static void printAllNodes(ManagementService service) {
         System.out.println("\nActive nodes: " + service.getNodes().keySet());
-        service.getNodes().keySet().stream()
-            .sorted()
-            .forEach(nodeId -> {
-                service.printNode(nodeId);
-                service.waitForProcessing(150);
-            });
+        System.out.println("Crashed nodes: " + service.getCrashedNodes().keySet());
+        System.out.println("\nNode States:");
+        
+        // Get all node IDs (both active and crashed) and print in sorted order
+        java.util.Set<Integer> allNodeIds = new java.util.TreeSet<>();
+        allNodeIds.addAll(service.getNodes().keySet());
+        allNodeIds.addAll(service.getCrashedNodes().keySet());
+        
+        allNodeIds.forEach(nodeId -> {
+            service.printNode(nodeId);
+            service.waitForProcessing(150);
+        });
     }
     
-    private static void waitForProcessing(Scanner scanner, ManagementService service) {
-        System.out.print("Enter milliseconds to wait: ");
-        long ms = Long.parseLong(scanner.nextLine().trim());
-        System.out.println("Waiting " + ms + "ms...");
-        service.waitForProcessing(ms);
-        System.out.println("Done waiting.");
+    private static void crashNode(Scanner scanner, ManagementService service) {
+        System.out.print("Enter node ID to crash: ");
+        int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        service.crashNode(nodeId);
+        System.out.println("Crash signal sent to node " + nodeId);
+    }
+    
+    private static void recoverNode(Scanner scanner, ManagementService service) {
+        System.out.print("Enter node ID to recover: ");
+        int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        System.out.print("Enter peer node ID to contact for topology: ");
+        int peerNodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        service.recoverNode(nodeId, peerNodeId);
+        System.out.println("Recovery signal sent to node " + nodeId);
+        service.waitForProcessing(1000);
+    }
+    
+    private static void leaveNetwork(Scanner scanner, ManagementService service) {
+        System.out.print("Enter node ID to leave gracefully: ");
+        int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        service.leaveNetwork(nodeId);
+        System.out.println("Leave signal sent to node " + nodeId);
+        System.out.println("Waiting for leave operation to complete...");
+        service.waitForProcessing(3000);
+        System.out.println("Leave operation completed or timed out.");
     }
 }
