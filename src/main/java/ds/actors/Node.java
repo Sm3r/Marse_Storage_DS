@@ -395,17 +395,29 @@ public class Node extends AbstractActor {
                 log.debug("Node[{}]: Leave timeout cancelled - all acks received", id);
             }
             
-            List<ActorRef> clockwiseNeighbors = getClockwiseNeighbors(Settings.N);
-            for (ActorRef neighbor : clockwiseNeighbors) {
-                for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
-                    int key = entry.getKey();
-                    DataItem value = entry.getValue();
-                    List<Integer> nodeIds = new ArrayList<>(peers.keySet());
-                    nodeIds.add(this.id);
-                    List<Integer> replicaIds = findReplicaNodesIds(key, nodeIds);
-                    if (replicaIds.contains(msg.nodeId())) {
-                        delayer.delayedMsg(getSelf(), new WriteDataRequest(key, value), neighbor);
-                        log.debug("Node[{}]: Sending key {} to Node[{}] before leaving (replicas: {})", id, key, msg.nodeId(), replicaIds);
+            // Calculate new replica assignments after this node leaves
+            List<Integer> nodeIdsAfterLeave = new ArrayList<>(peers.keySet());
+            for (Map.Entry<Integer, DataItem> entry : data.entrySet()) {
+                int key = entry.getKey();
+                DataItem value = entry.getValue();
+                
+                // Current replicas (with this node)
+                List<Integer> nodeIdsCurrent = new ArrayList<>(peers.keySet());
+                nodeIdsCurrent.add(this.id);
+                List<Integer> currentReplicaIds = findReplicaNodesIds(key, nodeIdsCurrent);
+                
+                // Future replicas (without this node)
+                List<Integer> futureReplicaIds = findReplicaNodesIds(key, nodeIdsAfterLeave);
+                
+                // Send data to nodes that will become new replicas
+                for (Integer newReplicaId : futureReplicaIds) {
+                    if (!currentReplicaIds.contains(newReplicaId)) {
+                        // This node needs to receive the data
+                        ActorRef newReplica = peers.get(newReplicaId);
+                        if (newReplica != null) {
+                            delayer.delayedMsg(getSelf(), new WriteDataRequest(key, value), newReplica);
+                            log.info("Node[{}]: Sending key {} to new replica Node[{}] before leaving", id, key, newReplicaId);
+                        }
                     }
                 }
             }
@@ -413,6 +425,7 @@ public class Node extends AbstractActor {
                 delayer.delayedMsg(getSelf(), new LeaveNotify(id), peer);
             }
             log.info("Node[{}]: Received all AckResponses, leaving the network", id);
+            System.out.println("✓ Node[" + id + "] left the network successfully");
             getContext().stop(getSelf());
         }
     }
@@ -427,6 +440,7 @@ public class Node extends AbstractActor {
         if (leaveTimeout != null) {
             log.warning("Node[{}]: Leave operation timeout - only received {} of {} required acks, aborting leave", 
                         id, responseReceived, Settings.N);
+            System.out.println("✗ Node[" + id + "] failed to leave: timeout (received " + responseReceived + "/" + Settings.N + " acks)");
             // Reset state and abort the leave operation
             responseReceived = 0;
             leaveTimeout = null;
@@ -453,10 +467,15 @@ public class Node extends AbstractActor {
     }
     
     private void print(Print msg) {
-        String output = String.format("Node[%d]: Data: %s", id, formatDataStore());
+        String output = String.format("Node[%d]:\n  - Data: %s\n  - Peers: %s", id, formatDataStore(), peers.keySet());
         log.info(output);
         System.out.println(output);
     }
+    
+    private void handlePrintNetwork(Types.PrintNetwork msg) {
+        delayer.delayedMsg(getSelf(), new Types.NetworkStatus(id, false, new HashMap<>(peers)), getSender());
+    }
+    
     private void printPeers(PrintPeers msg) {
         String output = String.format("Node[%d]: Known peers: %s", id, peers.keySet());
         log.info(output);
@@ -503,6 +522,7 @@ public class Node extends AbstractActor {
                 // Utility messages
                 .match(Print.class, this::print)
                 .match(PrintPeers.class, this::printPeers)
+                .match(Types.PrintNetwork.class, this::handlePrintNetwork)
                 .matchAny(msg -> log.warning("Node[{}]: Received unknown message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }
@@ -512,6 +532,9 @@ public class Node extends AbstractActor {
                 .match(Recover.class, this::handleRecover)
                 .match(TopologyResponse.class, this::handleTopologyResponse)
                 .match(Print.class, this::print)
+                .match(Types.PrintNetwork.class, msg -> {
+                    delayer.delayedMsg(getSelf(), new Types.NetworkStatus(id, true, new HashMap<>(peers)), getSender());
+                })
                 .matchAny(msg -> log.warning("Node[{}]: Node is crashed. Ignoring message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }

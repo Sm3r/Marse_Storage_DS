@@ -39,27 +39,24 @@ public class Main {
                         addNode(scanner, service);
                         break;
                     case "2":
-                        removeNode(scanner, service);
-                        break;
-                    case "3":
                         updateValue(scanner, service);
                         break;
-                    case "4":
+                    case "3":
                         getValue(scanner, service);
                         break;
-                    case "5":
+                    case "4":
                         printAllNodes(service);
                         break;
-                    case "6":
+                    case "5":
                         crashNode(scanner, service);
                         break;
-                    case "7":
+                    case "6":
                         recoverNode(scanner, service);
                         break;
-                    case "8":
+                    case "7":
                         leaveNetwork(scanner, service);
                         break;
-                    case "9":
+                    case "8":
                         running = false;
                         System.out.println("\nShutting down...");
                         break;
@@ -80,19 +77,17 @@ public class Main {
     
     private static void displayMenu() {
         System.out.println("\n" + "=".repeat(50));
-        System.out.println("DISTRIBUTED STORAGE SYSTEM - MENU");
+        System.out.println("DISTRIBUTED STORAGE SYSTEM");
         System.out.println("=".repeat(50));
         System.out.println("1. Add Node");
-        System.out.println("2. Remove Node");
-        System.out.println("3. Update Value (via Client)");
-        System.out.println("4. Get Value (via Client)");
-        System.out.println("5. Print All Nodes");
-        System.out.println("6. Crash Node");
-        System.out.println("7. Recover Node");
-        System.out.println("8. Leave Network (Graceful)");
-        System.out.println("9. Exit");
+        System.out.println("2. Update Value");
+        System.out.println("3. Get Value");
+        System.out.println("4. Print Network");
+        System.out.println("5. Crash Node");
+        System.out.println("6. Recover Node");
+        System.out.println("7. Leave Network");
+        System.out.println("8. Exit");
         System.out.println("=".repeat(50));
-        System.out.println("Enter choice: ");
         System.out.flush();
     }
     
@@ -100,13 +95,6 @@ public class Main {
         System.out.print("Enter node ID: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         service.addNode(nodeId);
-        service.waitForProcessing(1000);
-    }
-    
-    private static void removeNode(Scanner scanner, ManagementService service) {
-        System.out.print("Enter node ID to remove: ");
-        int nodeId = Integer.parseInt(scanner.nextLine().trim());
-        service.removeNode(nodeId);
         service.waitForProcessing(1000);
     }
     
@@ -152,19 +140,8 @@ public class Main {
     }
     
     private static void printAllNodes(ManagementService service) {
-        System.out.println("\nActive nodes: " + service.getNodes().keySet());
-        System.out.println("Crashed nodes: " + service.getCrashedNodes().keySet());
-        System.out.println("\nNode States:");
-        
-        // Get all node IDs (both active and crashed) and print in sorted order
-        java.util.Set<Integer> allNodeIds = new java.util.TreeSet<>();
-        allNodeIds.addAll(service.getNodes().keySet());
-        allNodeIds.addAll(service.getCrashedNodes().keySet());
-        
-        allNodeIds.forEach(nodeId -> {
-            service.printNode(nodeId);
-            service.waitForProcessing(150);
-        });
+        service.printNetworkStatus();
+        service.waitForProcessing(2000);
     }
     
     private static void crashNode(Scanner scanner, ManagementService service) {
@@ -190,9 +167,6 @@ public class Main {
         System.out.print("Enter node ID to leave gracefully: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         service.leaveNetwork(nodeId);
-        System.out.println("Leave signal sent to node " + nodeId);
-        System.out.println("Waiting for leave operation to complete...");
         service.waitForProcessing(3000);
-        System.out.println("Leave operation completed or timed out.");
     }
 }

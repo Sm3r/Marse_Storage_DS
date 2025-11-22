@@ -2,6 +2,7 @@ package ds;
 
 import ds.actors.Node;
 import ds.actors.Client;
+import ds.model.Types;
 import ds.model.Types.*;
 import ds.model.Delayer;
 import akka.actor.ActorRef;
@@ -203,6 +204,67 @@ public class ManagementService {
         crashedNodes.remove(nodeId);
         nodes.put(nodeId, node);
         System.out.println("Recovery signal sent to node " + nodeId + " to contact node " + peerNodeId);
+    }
+
+    // Send a request to a client (no delay for user-initiated requests)
+    public void sendClientRequest(ActorRef client, Object request) {
+        client.tell(request, ActorRef.noSender());
+    }
+    
+    // Collect and print network status from all nodes
+    public void printNetworkStatus() {
+        // Create a collector actor to gather responses from all nodes
+        ActorRef collector = system.actorOf(Props.create(akka.actor.AbstractActor.class, () -> 
+            new akka.actor.AbstractActor() {
+                private final java.util.Map<Integer, Types.NetworkStatus> statuses = new java.util.TreeMap<>();
+                private final java.util.Set<Integer> activeNodes = new java.util.TreeSet<>();
+                private final java.util.Set<Integer> crashedNodes = new java.util.TreeSet<>();
+                private int expectedResponses = 0;
+                private int receivedResponses = 0;
+                
+                @Override
+                public void preStart() {
+                    expectedResponses = nodes.size() + crashedNodes.size();
+                }
+                
+                @Override
+                public Receive createReceive() {
+                    return receiveBuilder()
+                        .match(Types.NetworkStatus.class, msg -> {
+                            statuses.put(msg.nodeId(), msg);
+                            if (msg.isCrashed()) {
+                                crashedNodes.add(msg.nodeId());
+                            } else {
+                                activeNodes.add(msg.nodeId());
+                            }
+                            receivedResponses++;
+                            
+                            if (receivedResponses >= expectedResponses) {
+                                // Print the collected information
+                                System.out.println("\nActive nodes: " + activeNodes);
+                                System.out.println("Crashed nodes: " + crashedNodes);
+                                System.out.println("\nNode States:");
+                                
+                                for (Integer nodeId : statuses.keySet()) {
+                                    printNode(nodeId);
+                                    waitForProcessing(150);
+                                }
+                                
+                                getContext().stop(getSelf());
+                            }
+                        })
+                        .build();
+                }
+            }
+        ));
+        
+        // Request status from all nodes
+        for (ActorRef node : nodes.values()) {
+            delayer.delayedMsg(collector, new Types.PrintNetwork(), node);
+        }
+        for (ActorRef node : crashedNodes.values()) {
+            delayer.delayedMsg(collector, new Types.PrintNetwork(), node);
+        }
     }
 
     // Gracefully leave the network

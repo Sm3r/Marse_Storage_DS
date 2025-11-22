@@ -22,6 +22,8 @@ public class Types {
     public record AddPeer(int id, ActorRef peer) {}
     public record Print() {}
     public record PrintPeers() {}
+    public record PrintNetwork() {}
+    public record NetworkStatus(int nodeId, boolean isCrashed, Map<Integer, ActorRef> peers) {}
     
     // ==================== Coordinator Node -> Client Messages ====================
     
