@@ -1,6 +1,10 @@
 package ds.actors;
 
 import ds.model.Delayer;
+import ds.model.Types.ClientGetRequest;
+import ds.model.Types.ClientUpdateRequest;
+import ds.model.Types.Result;
+
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.event.Logging;
@@ -29,30 +33,29 @@ public class Client extends AbstractActor {
         this.nodes = nodeMap;
     }
 
-    // Handle GET request from client
+    // Handle GET/UPDATE request from main
     private void handleGetRequest(GetRequest msg) {
         ActorRef node = nodes.get(msg.nodeId());
         if (node != null) {
             log.info("Client[{}]: Sending GET request for key {} to node {}", id, msg.key(), msg.nodeId());
-            delayer.delayedMsg(getSelf(), new ds.model.Types.ClientGetRequest(msg.key()), node);
+            delayer.delayedMsg(getSelf(), new ClientGetRequest(msg.key()), node);
         } else {
             log.warning("Client[{}]: Node {} not found for GET request", id, msg.nodeId());
         }
     }
 
-    // Handle UPDATE request from client
     private void handleUpdateRequest(UpdateRequest msg) {
         ActorRef node = nodes.get(msg.nodeId());
         if (node != null) {
             log.info("Client[{}]: Sending UPDATE request for key {} with value '{}' to node {}", id, msg.key(), msg.value(), msg.nodeId());
-            delayer.delayedMsg(getSelf(), new ds.model.Types.ClientUpdateRequest(msg.key(), msg.value()), node);
+            delayer.delayedMsg(getSelf(), new ClientUpdateRequest(msg.key(), msg.value()), node);
         } else {
             log.warning("Client[{}]: Node {} not found for UPDATE request", id, msg.nodeId());
         }
     }
 
     // Handle Result response from node
-    private void handleResult(ds.model.Types.Result msg) {
+    private void handleResult(Result msg) {
         if (msg.value() != null) {
             String output = String.format("Client[%d]: Received result for operation %d - Value: '%s' (version: %d)", 
                 id, msg.op_id(), msg.value().value(), msg.value().version());
@@ -71,7 +74,7 @@ public class Client extends AbstractActor {
         return receiveBuilder()
                 .match(GetRequest.class, this::handleGetRequest)
                 .match(UpdateRequest.class, this::handleUpdateRequest)
-                .match(ds.model.Types.Result.class, this::handleResult)
+                .match(Result.class, this::handleResult)
                 .build();
     }
 }

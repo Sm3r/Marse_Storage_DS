@@ -79,7 +79,6 @@ public class ManagementService {
     // Add a new node to the system
     public void addNode(int nodeId) {
         if (!nodes.containsKey(nodeId)) {
-            // Pick a bootstrapper node BEFORE creating the new node
             ActorRef bootstrapper = pickRandom(nodes);
             nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
             System.out.println("Node " + nodeId + " added. Active nodes: " + nodes.keySet());
@@ -139,21 +138,6 @@ public class ManagementService {
     // Get node actor reference by ID
     public ActorRef getNode(int nodeId) {
         return nodes.get(nodeId);
-    }
-
-    // Get all nodes
-    public Map<Integer, ActorRef> getNodes() {
-        return nodes;
-    }
-
-    // Get all clients
-    public Map<Integer, ActorRef> getClients() {
-        return clients;
-    }
-
-    // Get all crashed nodes
-    public Map<Integer, ActorRef> getCrashedNodes() {
-        return crashedNodes;
     }
 
     // Check if node exists

@@ -522,7 +522,7 @@ public class Node extends AbstractActor {
                 // Utility messages
                 .match(Print.class, this::print)
                 .match(PrintPeers.class, this::printPeers)
-                .match(Types.PrintNetwork.class, this::handlePrintNetwork)
+                .match(PrintNetwork.class, this::handlePrintNetwork)
                 .matchAny(msg -> log.warning("Node[{}]: Received unknown message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }
@@ -532,9 +532,7 @@ public class Node extends AbstractActor {
                 .match(Recover.class, this::handleRecover)
                 .match(TopologyResponse.class, this::handleTopologyResponse)
                 .match(Print.class, this::print)
-                .match(Types.PrintNetwork.class, msg -> {
-                    delayer.delayedMsg(getSelf(), new Types.NetworkStatus(id, true, new HashMap<>(peers)), getSender());
-                })
+                .match(PrintNetwork.class, this::handlePrintNetwork)
                 .matchAny(msg -> log.warning("Node[{}]: Node is crashed. Ignoring message: {}", id, msg.getClass().getSimpleName()))
                 .build();
     }

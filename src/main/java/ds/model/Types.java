@@ -20,10 +20,6 @@ public class Types {
     public record ClientUpdateRequest(int key, String value) {}
     public record SetPeers(Map<Integer, ActorRef> peers) {}
     public record AddPeer(int id, ActorRef peer) {}
-    public record Print() {}
-    public record PrintPeers() {}
-    public record PrintNetwork() {}
-    public record NetworkStatus(int nodeId, boolean isCrashed, Map<Integer, ActorRef> peers) {}
     
     // ==================== Coordinator Node -> Client Messages ====================
     
@@ -65,4 +61,10 @@ public class Types {
     public record AckRequest() {}
     public record AckResponse(int nodeId) {}
     public record LeaveNotify(int nodeId) {}
+
+    // ==================== Utility Messages ====================
+    public record Print() {}
+    public record PrintPeers() {}
+    public record PrintNetwork() {}
+    public record NetworkStatus(int nodeId, boolean isCrashed, Map<Integer, ActorRef> peers) {}
 }

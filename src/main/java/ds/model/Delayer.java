@@ -22,12 +22,12 @@ public class Delayer {
         return Math.max((int) val, 0);
     }
 
-    /** Normal send, no delay */
+    // Normal send, no delay
     public void msg(ActorRef sender, Object message, ActorRef target) {
         target.tell(message, sender);
     }
 
-    /** Send with Gaussian random delay */
+    // Send with Gaussian random delay
     public void delayedMsg(ActorRef sender, Object message, ActorRef target) {
         int delay = gaussianDelay();
         system.scheduler().scheduleOnce(

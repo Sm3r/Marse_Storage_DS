@@ -4,7 +4,6 @@ import ds.actors.Client;
 import akka.actor.ActorRef;
 import java.util.Scanner;
 
-// Main class - minimal entry point
 public class Main {
 
     public static void main(String[] args) {
@@ -16,15 +15,8 @@ public class Main {
         System.out.println("=== Starting Execution ===\n");
 
         System.out.println("- Initializing the system \n");
-        // Initialize the system with initial nodes
         service.initialize();
-        
-        // Wait for initialization messages to be processed
         service.waitForProcessing(2000);
-
-        System.out.println("\n=== System Initialized ===");
-        System.out.println("Active nodes: " + service.getNodes().keySet());
-        System.out.println("Active clients: " + service.getClients().keySet());
         
         // Interactive TUI
         boolean running = true;
@@ -67,10 +59,8 @@ public class Main {
                 System.out.println("Error: " + e.getMessage());
             }
         }
-        
         scanner.close();
         
-        // Terminate the ActorSystem to end the program
         service.shutdown();
         System.out.println("\n=== System Terminated ===");
     }
