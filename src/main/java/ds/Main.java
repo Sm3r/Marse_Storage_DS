@@ -8,7 +8,6 @@ public class Main {
 
     public static void main(String[] args) {
         
-        // Create management service
         ManagementService service = new ManagementService();
         Scanner scanner = new Scanner(System.in);
         
@@ -89,11 +88,22 @@ public class Main {
     }
     
     private static void updateValue(Scanner scanner, ManagementService service) {
-        System.out.print("Enter client ID (1 or 2): ");
+        System.out.print("Enter client ID: ");
         int clientId = Integer.parseInt(scanner.nextLine().trim());
+        
+        ActorRef client = service.getClient(clientId);
+        if (client == null) {
+            System.out.println("Error: Client " + clientId + " not found.");
+            return;
+        }
         
         System.out.print("Enter target node ID: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        if (!service.nodeExists(nodeId)) {
+            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            return;
+        }
         
         System.out.print("Enter key: ");
         int key = Integer.parseInt(scanner.nextLine().trim());
@@ -101,42 +111,44 @@ public class Main {
         System.out.print("Enter value: ");
         String value = scanner.nextLine().trim();
         
-        ActorRef client = service.getClient(clientId);
-        if (client != null) {
-            client.tell(new Client.UpdateRequest(nodeId, key, value), ActorRef.noSender());
-            System.out.println("UPDATE request sent.");
-        } else {
-            System.out.println("Client " + clientId + " not found.");
-        }
+        client.tell(new Client.UpdateRequest(nodeId, key, value), ActorRef.noSender());
+        System.out.println("UPDATE request sent.");
     }
     
     private static void getValue(Scanner scanner, ManagementService service) {
         System.out.print("Enter client ID (1 or 2): ");
         int clientId = Integer.parseInt(scanner.nextLine().trim());
         
+        ActorRef client = service.getClient(clientId);
+        if (client == null) {
+            System.out.println("Error: Client " + clientId + " not found.");
+            return;
+        }
+        
         System.out.print("Enter target node ID: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        if (!service.nodeExists(nodeId)) {
+            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            return;
+        }
         
         System.out.print("Enter key: ");
         int key = Integer.parseInt(scanner.nextLine().trim());
         
-        ActorRef client = service.getClient(clientId);
-        if (client != null) {
-            client.tell(new Client.GetRequest(nodeId, key), ActorRef.noSender());
-            System.out.println("GET request sent.");
-        } else {
-            System.out.println("Client " + clientId + " not found.");
-        }
-    }
-    
-    private static void printAllNodes(ManagementService service) {
-        service.printNetworkStatus();
-        service.waitForProcessing(2000);
+        client.tell(new Client.GetRequest(nodeId, key), ActorRef.noSender());
+        System.out.println("GET request sent.");
     }
     
     private static void crashNode(Scanner scanner, ManagementService service) {
         System.out.print("Enter node ID to crash: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        if (!service.nodeExists(nodeId)) {
+            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            return;
+        }
+        
         service.crashNode(nodeId);
         System.out.println("Crash signal sent to node " + nodeId);
     }
@@ -144,9 +156,19 @@ public class Main {
     private static void recoverNode(Scanner scanner, ManagementService service) {
         System.out.print("Enter node ID to recover: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
+
+        if (!service.nodeExists(nodeId)) {
+            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            return;
+        }
         
         System.out.print("Enter peer node ID to contact for topology: ");
         int peerNodeId = Integer.parseInt(scanner.nextLine().trim());
+
+        if (!service.nodeExists(peerNodeId)) {
+            System.out.println("Error: Peer node " + peerNodeId + " is not present in the system.");
+            return;
+        }
         
         service.recoverNode(nodeId, peerNodeId);
         System.out.println("Recovery signal sent to node " + nodeId);
@@ -156,7 +178,18 @@ public class Main {
     private static void leaveNetwork(Scanner scanner, ManagementService service) {
         System.out.print("Enter node ID to leave gracefully: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
+        
+        if (!service.nodeExists(nodeId)) {
+            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            return;
+        }
+        
         service.leaveNetwork(nodeId);
         service.waitForProcessing(3000);
+    }
+
+    private static void printAllNodes(ManagementService service) {
+        service.printNetworkStatus();
+        service.waitForProcessing(2000);
     }
 }

@@ -225,7 +225,9 @@ public class ManagementService {
                             
                             if (receivedResponses >= expectedResponses) {
                                 // Print the collected information
-                                System.out.println("\nActive nodes: " + activeNodes);
+                                System.out.println("\n=== Network Status ===");
+                                System.out.println("\nClients: " + clients.keySet());
+                                System.out.println("Active nodes: " + activeNodes);
                                 System.out.println("Crashed nodes: " + crashedNodes);
                                 System.out.println("\nNode States:");
                                 
