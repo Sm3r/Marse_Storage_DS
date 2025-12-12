@@ -8,9 +8,13 @@ public class Types {
     
     // ==================== Data Models ====================
     
-    public record DataItem(String value, long version) {
+    public record DataItem(String value, long version, int nodeId) {
         public DataItem(String value) {
-            this(value, 0L);
+            this(value, 0L, 0);
+        }
+        
+        public DataItem(String value, long version) {
+            this(value, version, 0);
         }
     }
     
@@ -28,12 +32,12 @@ public class Types {
     
     // ==================== Handler -> Replica Node Messages ====================
     
-    public record ReadDataRequest(int key) {}
+    public record ReadDataRequest(int key, long lamportClock) {}
     public record WriteDataRequest(int key, DataItem dataItem) {}
     
     // ==================== Replica Node -> Handler Messages ====================
     
-    public record ReadDataResponse(DataItem value) {}
+    public record ReadDataResponse(DataItem value, long lamportClock) {}
     
     // ==================== Handler -> Coordinator Node Messages ====================
     

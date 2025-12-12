@@ -57,8 +57,8 @@ public class Client extends AbstractActor {
     // Handle Result response from node
     private void handleResult(Result msg) {
         if (msg.value() != null) {
-            String output = String.format("Client[%d]: Received result for operation %d - Value: '%s' (version: %d)", 
-                id, msg.op_id(), msg.value().value(), msg.value().version());
+            String output = String.format("Client[%d]: Received result for operation %d - Value: '%s' (version: %d, nodeId: %d)", 
+                id, msg.op_id(), msg.value().value(), msg.value().version(), msg.value().nodeId());
             log.info(output);
             System.out.println(output);
         } else {

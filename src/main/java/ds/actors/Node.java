@@ -34,6 +34,7 @@ public class Node extends AbstractActor {
     private final Map<Integer, Request> requestsLedger;
     private int responseReceived = 0;
     private Cancellable leaveTimeout = null;
+    private long lamportClock = 0;  // Lamport logical clock for sequential consistency
 
     // Constructors
     public Node(int id, ActorRef bootstrapper, Delayer delayer) {
@@ -139,7 +140,8 @@ public class Node extends AbstractActor {
 
     // ======================= GET/UPDATE operation handlers ====================
     private void handleClientGetRequest(ClientGetRequest msg) {
-        log.debug("Node[{}]: Received client GET request for key {}", id, msg.key());
+        lamportClock++;  // Increment Lamport clock for new operation
+        log.debug("Node[{}]: Received client GET request for key {} (lamport={})", id, msg.key(), lamportClock);
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
@@ -147,11 +149,12 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.GET, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), coordinatorIsReplica, delayer));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), coordinatorIsReplica, delayer, lamportClock, id));
     }
     
     private void handleClientUpdateRequest(ClientUpdateRequest msg) {
-        log.info("Node[{}]: Received client UPDATE request for key {} with value {}", id, msg.key(), msg.value());
+        lamportClock++;  // Increment Lamport clock for new operation
+        log.info("Node[{}]: Received client UPDATE request for key {} with value {} (lamport={})", id, msg.key(), msg.value(), lamportClock);
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
@@ -159,17 +162,19 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), coordinatorIsReplica, delayer));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), coordinatorIsReplica, delayer, lamportClock, id));
     }
 
     private void handleReadDataRequest(ReadDataRequest msg) {
-        log.info("Node[{}]: Handling read data request for key {}", id, msg.key());
+        lamportClock = Math.max(lamportClock, msg.lamportClock()) + 1;  // Update Lamport clock
+        log.info("Node[{}]: Handling read data request for key {} (lamport={})", id, msg.key(), lamportClock);
         DataItem value = data.get(msg.key());
-        delayer.delayedMsg(getSelf(), new ReadDataResponse(value), getSender());
+        delayer.delayedMsg(getSelf(), new ReadDataResponse(value, lamportClock), getSender());
     }
 
     private void handleWriteDataRequest(WriteDataRequest msg) {
-        log.info("Node[{}]: Updating key {} with value '{}'", id, msg.key(), msg.dataItem().value());
+        lamportClock = Math.max(lamportClock, msg.dataItem().version()) + 1;  // Update Lamport clock from message
+        log.info("Node[{}]: Updating key {} with '{}' (v={},n={})", id, msg.key(), msg.dataItem().value(), msg.dataItem().version() + "," + msg.dataItem().nodeId());
         data.put(msg.key(), msg.dataItem());
     }
 
@@ -284,14 +289,15 @@ public class Node extends AbstractActor {
         } else {
             // Spawn handlers to sync data items
             for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
+                lamportClock++;  // Increment Lamport clock for each sync operation
                 int key = entry.getKey();
                 ArrayList<ActorRef> nodeRefs = new ArrayList<>();
                 ArrayList<DataItem> quorum = new ArrayList<>();
                 boolean coordinatorIsReplica = prepareReplicasAndQuorum(key, nodeRefs, quorum);
                 int op_id = generateOperationId();
                 requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
-                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer));
-                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {})", id, key, op_id);
+                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer, lamportClock, id));
+                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {}, lamport: {})", id, key, op_id, lamportClock);
             }
         }
     }
