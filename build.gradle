@@ -6,23 +6,18 @@ apply plugin: 'application'
 repositories {
     mavenCentral()
     mavenLocal()
-    maven {
-        url = "https://repo.akka.io/maven"
-    }
 }
 
 def versions = [
         ScalaBinary: "2.13",
-        AkkaVersion: "2.9.0",
+        AkkaVersion: "2.8.5",
         LogBackVersion: "1.2.3",
         JunitVersion: "4.13.1"
 ]
 
 dependencies {
-    implementation "com.typesafe.akka:akka-bom_${versions.ScalaBinary}:${versions.AkkaVersion}"
-    implementation "com.typesafe.akka:akka-actor-typed_${versions.ScalaBinary}:${versions.AkkaVersion}"
-
-    testImplementation "com.typesafe.akka:akka-actor-testkit-typed_${versions.ScalaBinary}:${versions.AkkaVersion}"
+    implementation "com.typesafe.akka:akka-actor_${versions.ScalaBinary}:${versions.AkkaVersion}"
+    
     testImplementation "junit:junit:${versions.JunitVersion}"
     implementation "ch.qos.logback:logback-classic:${versions.LogBackVersion}"
 }
