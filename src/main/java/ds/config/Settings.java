@@ -33,12 +33,6 @@ public class Settings {
     public static final int stddevMs = 10;
     
     // ============ CONSTRAINT VALIDATION ============
-    
-    /**
-     * Validates that all configuration parameters satisfy required constraints.
-     * Throws IllegalArgumentException if any constraint is violated.
-     * @return true if all constraints are satisfied
-     */
     public static boolean validateConstraints() {
         StringBuilder errors = new StringBuilder();
         
@@ -72,14 +66,6 @@ public class Settings {
         // Constraint 5: T must be positive
         if (T <= 0) {
             errors.append("- T must be > 0 (current value: ").append(T).append(")\n");
-        }
-        
-        // Constraint 6: Network delay parameters must be reasonable
-        if (meanMs < 0) {
-            errors.append("- meanMs must be ≥ 0 (current value: ").append(meanMs).append(")\n");
-        }
-        if (stddevMs < 0) {
-            errors.append("- stddevMs must be ≥ 0 (current value: ").append(stddevMs).append(")\n");
         }
         
         // If any errors, throw exception

@@ -1,7 +1,6 @@
 package ds;
 
 import ds.actors.Client;
-import ds.actors.Node;
 import akka.actor.ActorRef;
 import org.junit.After;
 import org.junit.Before;
