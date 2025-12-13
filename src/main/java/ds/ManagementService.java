@@ -158,6 +158,12 @@ public class ManagementService {
     public void crashNode(int nodeId) {
         ActorRef node = nodes.get(nodeId);
         if (node != null) {
+            // Check if crashing this node would leave no active nodes
+            if (nodes.size() <= 1) {
+                System.out.println("✗ ERROR: Cannot crash node " + nodeId + " - it is the last active node. At least one node must remain active.");
+                return;
+            }
+            
             delayer.delayedMsg(ActorRef.noSender(), new Crash(), node);
             // Move node from active to crashed list
             nodes.remove(nodeId);
@@ -257,6 +263,12 @@ public class ManagementService {
     public void leaveNetwork(int nodeId) {
         ActorRef node = nodes.get(nodeId);
         if (node != null) {
+            // Check if leaving this node would violate the N constraint
+            if (nodes.size() - 1 < ds.config.Settings.N) {
+                System.out.println("✗ ERROR: Cannot leave network - node " + nodeId + " leaving would result in " + (nodes.size() - 1) + " active nodes, but N=" + ds.config.Settings.N + " requires at least " + ds.config.Settings.N + " active nodes.");
+                return;
+            }
+            
             delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
             System.out.println("Leave signal sent to node " + nodeId);
             // Remove from our tracking map after sending leave signal
