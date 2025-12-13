@@ -21,6 +21,10 @@ public class ManagementService {
     private final Map<Integer, ActorRef> nodes;
     private final Map<Integer, ActorRef> clients;
     private final Map<Integer, ActorRef> crashedNodes;
+    
+    // Mutual exclusion for operations
+    private boolean topologyChangeInProgress = false;
+    private int ongoingOperations = 0;
 
     // =============== Constructor ====================
     public ManagementService() {
@@ -44,6 +48,51 @@ public class ManagementService {
             current++;
         }
         return null;
+    }
+    
+    // ================ Operation Tracking ====================
+    private synchronized boolean canStartTopologyChange() {
+        if (topologyChangeInProgress) {
+            System.out.println("✗ ERROR: Another topology change is in progress. Please wait.");
+            return false;
+        }
+        if (ongoingOperations > 0) {
+            System.out.println("✗ ERROR: Cannot perform topology change - " + ongoingOperations + " operation(s) in progress. Please wait.");
+            return false;
+        }
+        topologyChangeInProgress = true;
+        return true;
+    }
+    
+    private synchronized void finishTopologyChange() {
+        topologyChangeInProgress = false;
+    }
+    
+    private synchronized boolean canStartOperation() {
+        if (topologyChangeInProgress) {
+            System.out.println("✗ ERROR: Topology change in progress. Please wait before starting operations.");
+            return false;
+        }
+        ongoingOperations++;
+        return true;
+    }
+    
+    public synchronized void finishOperation() {
+        if (ongoingOperations > 0) {
+            ongoingOperations--;
+        }
+    }
+    
+    public synchronized int getOngoingOperations() {
+        return ongoingOperations;
+    }
+    
+    public synchronized boolean isTopologyChangeInProgress() {
+        return topologyChangeInProgress;
+    }
+    
+    public boolean startOperation() {
+        return canStartOperation();
     }
 
 
@@ -78,23 +127,39 @@ public class ManagementService {
 
     // Add a new node to the system
     public void addNode(int nodeId) {
-        if (!nodes.containsKey(nodeId)) {
-            ActorRef bootstrapper = pickRandom(nodes);
-            nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
-            System.out.println("Node " + nodeId + " added. Active nodes: " + nodes.keySet());
-        } else {
-            System.out.println("Node " + nodeId + " already exists");
+        if (!canStartTopologyChange()) {
+            return;
+        }
+        
+        try {
+            if (!nodes.containsKey(nodeId)) {
+                ActorRef bootstrapper = pickRandom(nodes);
+                nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
+                System.out.println("Node " + nodeId + " added. Active nodes: " + nodes.keySet());
+            } else {
+                System.out.println("Node " + nodeId + " already exists");
+            }
+        } finally {
+            finishTopologyChange();
         }
     }
 
     // Remove a node from the system
     public void removeNode(int nodeId) {
-        ActorRef removedNode = nodes.remove(nodeId);
-        if (removedNode != null) {
-            system.stop(removedNode);
-            System.out.println("Node " + nodeId + " removed. Active nodes: " + nodes.keySet());
-        } else {
-            System.out.println("Node " + nodeId + " not found");
+        if (!canStartTopologyChange()) {
+            return;
+        }
+        
+        try {
+            ActorRef removedNode = nodes.remove(nodeId);
+            if (removedNode != null) {
+                system.stop(removedNode);
+                System.out.println("Node " + nodeId + " removed. Active nodes: " + nodes.keySet());
+            } else {
+                System.out.println("Node " + nodeId + " not found");
+            }
+        } finally {
+            finishTopologyChange();
         }
     }
 
@@ -156,44 +221,60 @@ public class ManagementService {
 
     // Crash a node
     public void crashNode(int nodeId) {
-        ActorRef node = nodes.get(nodeId);
-        if (node != null) {
-            // Check if crashing this node would leave no active nodes
-            if (nodes.size() <= 1) {
-                System.out.println("✗ ERROR: Cannot crash node " + nodeId + " - it is the last active node. At least one node must remain active.");
-                return;
+        if (!canStartTopologyChange()) {
+            return;
+        }
+        
+        try {
+            ActorRef node = nodes.get(nodeId);
+            if (node != null) {
+                // Check if crashing this node would leave no active nodes
+                if (nodes.size() <= 1) {
+                    System.out.println("✗ ERROR: Cannot crash node " + nodeId + " - it is the last active node. At least one node must remain active.");
+                    return;
+                }
+                
+                delayer.delayedMsg(ActorRef.noSender(), new Crash(), node);
+                // Move node from active to crashed list
+                nodes.remove(nodeId);
+                crashedNodes.put(nodeId, node);
+                System.out.println("Crash signal sent to node " + nodeId);
+            } else {
+                System.out.println("Node " + nodeId + " not found");
             }
-            
-            delayer.delayedMsg(ActorRef.noSender(), new Crash(), node);
-            // Move node from active to crashed list
-            nodes.remove(nodeId);
-            crashedNodes.put(nodeId, node);
-            System.out.println("Crash signal sent to node " + nodeId);
-        } else {
-            System.out.println("Node " + nodeId + " not found");
+        } finally {
+            finishTopologyChange();
         }
     }
 
     // Recover a crashed node
     public void recoverNode(int nodeId, int peerNodeId) {
-        ActorRef node = crashedNodes.get(nodeId);
-        ActorRef peerNode = nodes.get(peerNodeId);
-        
-        if (node == null) {
-            System.out.println("Node " + nodeId + " not found in crashed nodes");
+        if (!canStartTopologyChange()) {
             return;
         }
         
-        if (peerNode == null) {
-            System.out.println("Peer node " + peerNodeId + " not found");
-            return;
+        try {
+            ActorRef node = crashedNodes.get(nodeId);
+            ActorRef peerNode = nodes.get(peerNodeId);
+            
+            if (node == null) {
+                System.out.println("Node " + nodeId + " not found in crashed nodes");
+                return;
+            }
+            
+            if (peerNode == null) {
+                System.out.println("Peer node " + peerNodeId + " not found");
+                return;
+            }
+            
+            delayer.delayedMsg(ActorRef.noSender(), new Recover(peerNode), node);
+            // Move node back from crashed to active list
+            crashedNodes.remove(nodeId);
+            nodes.put(nodeId, node);
+            System.out.println("Recovery signal sent to node " + nodeId + " to contact node " + peerNodeId);
+        } finally {
+            finishTopologyChange();
         }
-        
-        delayer.delayedMsg(ActorRef.noSender(), new Recover(peerNode), node);
-        // Move node back from crashed to active list
-        crashedNodes.remove(nodeId);
-        nodes.put(nodeId, node);
-        System.out.println("Recovery signal sent to node " + nodeId + " to contact node " + peerNodeId);
     }
 
     // Send a request to a client (no delay for user-initiated requests)
@@ -261,21 +342,29 @@ public class ManagementService {
 
     // Gracefully leave the network
     public void leaveNetwork(int nodeId) {
-        ActorRef node = nodes.get(nodeId);
-        if (node != null) {
-            // Check if leaving this node would violate the N constraint
-            if (nodes.size() - 1 < ds.config.Settings.N) {
-                System.out.println("✗ ERROR: Cannot leave network - node " + nodeId + " leaving would result in " + (nodes.size() - 1) + " active nodes, but N=" + ds.config.Settings.N + " requires at least " + ds.config.Settings.N + " active nodes.");
-                return;
+        if (!canStartTopologyChange()) {
+            return;
+        }
+        
+        try {
+            ActorRef node = nodes.get(nodeId);
+            if (node != null) {
+                // Check if leaving this node would violate the N constraint
+                if (nodes.size() - 1 < ds.config.Settings.N) {
+                    System.out.println("✗ ERROR: Cannot leave network - node " + nodeId + " leaving would result in " + (nodes.size() - 1) + " active nodes, but N=" + ds.config.Settings.N + " requires at least " + ds.config.Settings.N + " active nodes.");
+                    return;
+                }
+                
+                delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
+                System.out.println("Leave signal sent to node " + nodeId);
+                // Remove from our tracking map after sending leave signal
+                // The node will stop itself after completing the leave protocol
+                nodes.remove(nodeId);
+            } else {
+                System.out.println("Node " + nodeId + " not found");
             }
-            
-            delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
-            System.out.println("Leave signal sent to node " + nodeId);
-            // Remove from our tracking map after sending leave signal
-            // The node will stop itself after completing the leave protocol
-            nodes.remove(nodeId);
-        } else {
-            System.out.println("Node " + nodeId + " not found");
+        } finally {
+            finishTopologyChange();
         }
     }
 
