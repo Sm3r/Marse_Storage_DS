@@ -10,14 +10,12 @@ public class Main {
     public static void main(String[] args) {
         
         Scanner scanner = new Scanner(System.in);
-        configureSystemParameters(scanner);
+        Settings.configure(scanner);
         
         ManagementService service = new ManagementService();
         scanner = new Scanner(System.in);
         
         System.out.println("=== Starting Execution ===\n");
-
-        System.out.println("- Initializing the system \n");
         service.initialize();
         service.waitForProcessing(2000);
         
@@ -195,71 +193,5 @@ public class Main {
     private static void printAllNodes(ManagementService service) {
         service.printNetworkStatus();
         service.waitForProcessing(2000);
-    }
-    
-    // ==================== CONFIGURATION ====================
-    private static void configureSystemParameters(Scanner scanner) {
-        System.out.println("\n" + "=".repeat(15));
-        System.out.println("Configuration");
-        System.out.println("=".repeat(15));
-        System.out.println();
-        System.out.println("Please configure system parameters.");
-        System.out.println("Press ENTER to use default values shown in [brackets]\n");
-        
-        // Default values
-        final int DEFAULT_N = 3;
-        final int DEFAULT_R = 2;
-        final int DEFAULT_W = 2;
-        final int DEFAULT_T = 1000;
-        
-        boolean validConfig = false;
-        
-        while (!validConfig) {
-            // Use temporary variables to avoid polluting Settings with invalid values
-            int tempN = DEFAULT_N;
-            int tempR = DEFAULT_R;
-            int tempW = DEFAULT_W;
-            int tempT = DEFAULT_T;
-            
-            try {
-                System.out.print("Replication Factor (N) [" + DEFAULT_N + "]: ");
-                String nInput = scanner.nextLine().trim();
-                if (!nInput.isEmpty()) {
-                    tempN = Integer.parseInt(nInput);
-                }
-                System.out.print("Read Quorum (R) [" + DEFAULT_R + "]: ");
-                String rInput = scanner.nextLine().trim();
-                if (!rInput.isEmpty()) {
-                    tempR = Integer.parseInt(rInput);
-                }
-                System.out.print("Write Quorum (W) [" + DEFAULT_W + "]: ");
-                String wInput = scanner.nextLine().trim();
-                if (!wInput.isEmpty()) {
-                    tempW = Integer.parseInt(wInput);
-                }
-                System.out.print("Timeout in milliseconds (T) [" + DEFAULT_T + "]: ");
-                String tInput = scanner.nextLine().trim();
-                if (!tInput.isEmpty()) {
-                    tempT = Integer.parseInt(tInput);
-                }
-                System.out.println();
-
-                Settings.N = tempN;
-                Settings.R = tempR;
-                Settings.W = tempW;
-                Settings.T = tempT;
-                
-                // Validate configuration
-                if (Settings.validateConstraints()) {
-                    validConfig = true;
-                    Settings.printConfiguration();
-                }
-                
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid parameters\n");
-            } catch (IllegalArgumentException e) {
-                System.out.println("Invalid parameters\n");
-            }
-        }
     }
 }
