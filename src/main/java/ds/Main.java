@@ -101,7 +101,7 @@ public class Main {
             
             ActorRef client = service.getClient(clientId);
             if (client == null) {
-                System.out.println("Error: Client " + clientId + " not found.");
+                System.out.println("✗ ERROR: Client " + clientId + " not found.");
                 return;
             }
             
@@ -109,7 +109,7 @@ public class Main {
             int nodeId = Integer.parseInt(scanner.nextLine().trim());
             
             if (!service.nodeExists(nodeId)) {
-                System.out.println("Error: Node " + nodeId + " is not present in the system.");
+                System.out.println("✗ ERROR: Node " + nodeId + " is not present in the system.");
                 return;
             }
             
@@ -120,7 +120,7 @@ public class Main {
             String value = scanner.nextLine().trim();
             
             client.tell(new Client.UpdateRequest(nodeId, key, value), ActorRef.noSender());
-            System.out.println("UPDATE request sent.");
+            System.out.println("✓ UPDATE request sent.");
             
             // Wait for operation to complete
             service.waitForProcessing(1000);
@@ -140,7 +140,7 @@ public class Main {
             
             ActorRef client = service.getClient(clientId);
             if (client == null) {
-                System.out.println("Error: Client " + clientId + " not found.");
+                System.out.println("✗ ERROR: Client " + clientId + " not found.");
                 return;
             }
             
@@ -148,7 +148,7 @@ public class Main {
             int nodeId = Integer.parseInt(scanner.nextLine().trim());
             
             if (!service.nodeExists(nodeId)) {
-                System.out.println("Error: Node " + nodeId + " is not present in the system.");
+                System.out.println("✗ ERROR: Node " + nodeId + " is not present in the system.");
                 return;
             }
             
@@ -156,7 +156,7 @@ public class Main {
             int key = Integer.parseInt(scanner.nextLine().trim());
             
             client.tell(new Client.GetRequest(nodeId, key), ActorRef.noSender());
-            System.out.println("GET request sent.");
+            System.out.println("✓ GET request sent.");
             
             // Wait for operation to complete
             service.waitForProcessing(1000);
@@ -170,7 +170,7 @@ public class Main {
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         
         if (!service.nodeExists(nodeId)) {
-            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            System.out.println("✗ ERROR: Node " + nodeId + " is not present in the system.");
             return;
         }
         
@@ -182,7 +182,7 @@ public class Main {
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
 
         if (!service.nodeExists(nodeId)) {
-            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            System.out.println("✗ ERROR: Node " + nodeId + " is not present in the system.");
             return;
         }
         
@@ -190,12 +190,11 @@ public class Main {
         int peerNodeId = Integer.parseInt(scanner.nextLine().trim());
 
         if (!service.nodeExists(peerNodeId)) {
-            System.out.println("Error: Peer node " + peerNodeId + " is not present in the system.");
+            System.out.println("✗ ERROR: Peer node " + peerNodeId + " is not present in the system.");
             return;
         }
         
         service.recoverNode(nodeId, peerNodeId);
-        System.out.println("Recovery signal sent to node " + nodeId);
         service.waitForProcessing(1000);
     }
     
@@ -204,7 +203,7 @@ public class Main {
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         
         if (!service.nodeExists(nodeId)) {
-            System.out.println("Error: Node " + nodeId + " is not present in the system.");
+            System.out.println("✗ ERROR: Node " + nodeId + " is not present in the system.");
             return;
         }
         

@@ -95,8 +95,9 @@ public class ManagementService {
         return canStartOperation();
     }
 
-
-    // Initialize the system with nodes and client
+    // ================ System Initialization ====================
+    
+    // Initialize the system with nodes and clients
     public void initialize() {
 
         // Create initial nodes
@@ -135,9 +136,9 @@ public class ManagementService {
             if (!nodes.containsKey(nodeId)) {
                 ActorRef bootstrapper = pickRandom(nodes);
                 nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
-                System.out.println("Node " + nodeId + " added. Active nodes: " + nodes.keySet());
+                System.out.println("✓ Node " + nodeId + " added. Active nodes: " + nodes.keySet());
             } else {
-                System.out.println("Node " + nodeId + " already exists");
+                System.out.println("✗ ERROR: Node " + nodeId + " already exists");
             }
         } finally {
             finishTopologyChange();
@@ -156,13 +157,15 @@ public class ManagementService {
                 system.stop(removedNode);
                 System.out.println("Node " + nodeId + " removed. Active nodes: " + nodes.keySet());
             } else {
-                System.out.println("Node " + nodeId + " not found");
+                System.out.println("✗ ERROR: Node " + nodeId + " not found");
             }
         } finally {
             finishTopologyChange();
         }
     }
 
+    // ================ Diagnostic and Query Methods ====================
+    
     // Send print message to a node
     public void printNode(int nodeId) {
         ActorRef node = nodes.get(nodeId);
@@ -181,7 +184,7 @@ public class ManagementService {
             }
             delayer.delayedMsg(ActorRef.noSender(), new Print(), node);
         } else {
-            System.out.println("Node " + nodeId + " not found");
+            System.out.println("✗ ERROR: Node " + nodeId + " not found");
         }
     }
 
@@ -191,7 +194,7 @@ public class ManagementService {
         if (node != null) {
             delayer.delayedMsg(ActorRef.noSender(), new PrintPeers(), node);
         } else {
-            System.out.println("Node " + nodeId + " not found");
+            System.out.println("✗ ERROR: Node " + nodeId + " not found");
         }
     }
 
@@ -219,6 +222,8 @@ public class ManagementService {
         }
     }
 
+    // ================ Node Lifecycle Operations ====================
+    
     // Crash a node
     public void crashNode(int nodeId) {
         if (!canStartTopologyChange()) {
@@ -240,7 +245,7 @@ public class ManagementService {
                 crashedNodes.put(nodeId, node);
                 System.out.println("Crash signal sent to node " + nodeId);
             } else {
-                System.out.println("Node " + nodeId + " not found");
+                System.out.println("✗ ERROR: Node " + nodeId + " not found");
             }
         } finally {
             finishTopologyChange();
@@ -258,12 +263,12 @@ public class ManagementService {
             ActorRef peerNode = nodes.get(peerNodeId);
             
             if (node == null) {
-                System.out.println("Node " + nodeId + " not found in crashed nodes");
+                System.out.println("✗ ERROR: Node " + nodeId + " not found in crashed nodes");
                 return;
             }
             
             if (peerNode == null) {
-                System.out.println("Peer node " + peerNodeId + " not found");
+                System.out.println("✗ ERROR: Peer node " + peerNodeId + " not found");
                 return;
             }
             
@@ -277,12 +282,14 @@ public class ManagementService {
         }
     }
 
+    // ================ Client Communication ====================
+    
     // Send a request to a client (no delay for user-initiated requests)
     public void sendClientRequest(ActorRef client, Object request) {
         client.tell(request, ActorRef.noSender());
     }
     
-    // Collect and print network status from all nodes
+    // Collect and print network status from all nodes (active and crashed)
     public void printNetworkStatus() {
         // Create a collector actor to gather responses from all nodes
         ActorRef collector = system.actorOf(Props.create(akka.actor.AbstractActor.class, () -> 
@@ -363,7 +370,7 @@ public class ManagementService {
                 // The node will stop itself after completing the leave protocol
                 nodes.remove(nodeId);
             } else {
-                System.out.println("Node " + nodeId + " not found");
+                System.out.println("✗ ERROR: Node " + nodeId + " not found");
             }
         } finally {
             finishTopologyChange();
