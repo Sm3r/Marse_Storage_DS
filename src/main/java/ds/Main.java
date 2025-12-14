@@ -29,16 +29,16 @@ public class Main {
                 
                 switch (choice) {
                     case "1":
-                        addNode(scanner, service);
-                        break;
-                    case "2":
                         updateValue(scanner, service);
                         break;
-                    case "3":
+                    case "2":
                         getValue(scanner, service);
                         break;
-                    case "4":
+                    case "3":
                         printAllNodes(service);
+                        break;
+                    case "4":
+                        addNode(scanner, service);
                         break;
                     case "5":
                         crashNode(scanner, service);
@@ -70,13 +70,13 @@ public class Main {
         System.out.println("\n" + "=".repeat(50));
         System.out.println("DISTRIBUTED STORAGE SYSTEM");
         System.out.println("=".repeat(50));
-        System.out.println("1. Add Node");
-        System.out.println("2. Update Value");
-        System.out.println("3. Get Value");
-        System.out.println("4. Print Network");
+        System.out.println("1. Update Value");
+        System.out.println("2. Get Value");
+        System.out.println("3. Print Network");
+        System.out.println("4. Add Node");
         System.out.println("5. Crash Node");
         System.out.println("6. Recover Node");
-        System.out.println("7. Leave Network");
+        System.out.println("7. Remove Node");
         System.out.println("8. Exit");
         System.out.println("=".repeat(50));
         System.out.print("> ");
