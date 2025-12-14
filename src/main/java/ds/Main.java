@@ -175,7 +175,6 @@ public class Main {
         }
         
         service.crashNode(nodeId);
-        System.out.println("Crash signal sent to node " + nodeId);
     }
     
     private static void recoverNode(Scanner scanner, ManagementService service) {

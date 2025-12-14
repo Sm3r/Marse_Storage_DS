@@ -288,14 +288,14 @@ public class ManagementService {
         ActorRef collector = system.actorOf(Props.create(akka.actor.AbstractActor.class, () -> 
             new akka.actor.AbstractActor() {
                 private final java.util.Map<Integer, Types.NetworkStatus> statuses = new java.util.TreeMap<>();
-                private final java.util.Set<Integer> activeNodes = new java.util.TreeSet<>();
-                private final java.util.Set<Integer> crashedNodes = new java.util.TreeSet<>();
+                private final java.util.Set<Integer> activeNodesCollected = new java.util.TreeSet<>();
+                private final java.util.Set<Integer> crashedNodesCollected = new java.util.TreeSet<>();
                 private int expectedResponses = 0;
                 private int receivedResponses = 0;
                 
                 @Override
                 public void preStart() {
-                    expectedResponses = nodes.size() + crashedNodes.size();
+                    expectedResponses = nodes.size() + ManagementService.this.crashedNodes.size();
                 }
                 
                 @Override
@@ -304,9 +304,9 @@ public class ManagementService {
                         .match(Types.NetworkStatus.class, msg -> {
                             statuses.put(msg.nodeId(), msg);
                             if (msg.isCrashed()) {
-                                crashedNodes.add(msg.nodeId());
+                                crashedNodesCollected.add(msg.nodeId());
                             } else {
-                                activeNodes.add(msg.nodeId());
+                                activeNodesCollected.add(msg.nodeId());
                             }
                             receivedResponses++;
                             
@@ -314,8 +314,8 @@ public class ManagementService {
                                 // Print the collected information
                                 System.out.println("\n=== Network Status ===");
                                 System.out.println("\nClients: " + clients.keySet());
-                                System.out.println("Active nodes: " + activeNodes);
-                                System.out.println("Crashed nodes: " + crashedNodes);
+                                System.out.println("Active nodes: " + activeNodesCollected);
+                                System.out.println("Crashed nodes: " + crashedNodesCollected);
                                 System.out.println("\nNode States:");
                                 
                                 for (Integer nodeId : statuses.keySet()) {
@@ -335,7 +335,7 @@ public class ManagementService {
         for (ActorRef node : nodes.values()) {
             delayer.delayedMsg(collector, new Types.PrintNetwork(), node);
         }
-        for (ActorRef node : crashedNodes.values()) {
+        for (ActorRef node : ManagementService.this.crashedNodes.values()) {
             delayer.delayedMsg(collector, new Types.PrintNetwork(), node);
         }
     }
@@ -350,13 +350,15 @@ public class ManagementService {
             ActorRef node = nodes.get(nodeId);
             if (node != null) {
                 // Check if leaving this node would violate the N constraint
-                if (nodes.size() - 1 < ds.config.Settings.N) {
-                    System.out.println("✗ ERROR: Cannot leave network - node " + nodeId + " leaving would result in " + (nodes.size() - 1) + " active nodes, but N=" + ds.config.Settings.N + " requires at least " + ds.config.Settings.N + " active nodes.");
+                // Consider total nodes (active + crashed) to allow leaving even with crashed nodes
+                int totalNodesAfterLeave = (nodes.size() - 1) + crashedNodes.size();
+                if (totalNodesAfterLeave < ds.config.Settings.N) {
+                    System.out.println("✗ ERROR: Cannot leave network - node " + nodeId + " leaving would result in " + totalNodesAfterLeave + " total nodes, but N=" + ds.config.Settings.N + " requires at least " + ds.config.Settings.N + " nodes in the system.");
                     return;
                 }
                 
                 delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
-                System.out.println("Leave signal sent to node " + nodeId);
+                System.out.println("Leave signal sent to node " + nodeId + " (Note: Some operations may timeout if crashed nodes are part of quorums)");
                 // Remove from our tracking map after sending leave signal
                 // The node will stop itself after completing the leave protocol
                 nodes.remove(nodeId);
