@@ -25,13 +25,13 @@ public class Handler extends AbstractActor {
     private final String newValue;
     private final Delayer delayer;
     private final boolean coordinatorIsReplica;
-    private final long coordinatorLamportClock;  // Lamport clock from coordinator
+    private final long coordinatorClock;  // Clock from coordinator
     private final int coordinatorNodeId;  // Node ID for tie-breaking
     private int responsesReceived = 0;
-    private long maxLamportClock = 0;  // Track max Lamport clock from responses
+    private long maxClock = 0;  // Track max clock from responses
 
     // Constructor
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, boolean coordinatorIsReplica, Delayer delayer, long lamportClock, int nodeId) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, boolean coordinatorIsReplica, Delayer delayer, long clock, int nodeId) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
@@ -40,14 +40,14 @@ public class Handler extends AbstractActor {
         this.newValue = null;
         this.delayer = delayer;
         this.coordinatorIsReplica = coordinatorIsReplica;
-        this.coordinatorLamportClock = lamportClock;
+        this.coordinatorClock = clock;
         this.coordinatorNodeId = nodeId;
-        this.maxLamportClock = lamportClock;
+        this.maxClock = clock;
         scheduleTimeout();
         sendReadDataRequests(key);
     }
 
-    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value, boolean coordinatorIsReplica, Delayer delayer, long lamportClock, int nodeId) {
+    public Handler(int op_id, ActorRef coordinator, ArrayList<ActorRef> nodes, ArrayList<DataItem> quorum, int key, String value, boolean coordinatorIsReplica, Delayer delayer, long clock, int nodeId) {
         this.op_id = op_id;
         this.coordinator = coordinator;
         this.nodes = nodes;
@@ -56,10 +56,10 @@ public class Handler extends AbstractActor {
         this.newValue = value;
         this.delayer = delayer;
         this.coordinatorIsReplica = coordinatorIsReplica;
-        this.coordinatorLamportClock = lamportClock;
+        this.coordinatorClock = clock;
         this.coordinatorNodeId = nodeId;
-        this.maxLamportClock = lamportClock;
-        log.info("Handler[{}]: Created for UPDATE on key {} (replicas={}, lamport={})", op_id, key, nodes.size(), lamportClock);
+        this.maxClock = clock;
+        log.info("Handler[{}]: Created for UPDATE on key {} (replicas={}, clock={})", op_id, key, nodes.size(), clock);
         scheduleTimeout();
         sendReadDataRequests(key);
     }
@@ -77,7 +77,7 @@ public class Handler extends AbstractActor {
     
     private void sendReadDataRequests(int id) {
         for (ActorRef node : nodes) {
-            delayer.delayedMsg(getSelf(), new ReadDataRequest(id, coordinatorLamportClock), node);
+            delayer.delayedMsg(getSelf(), new ReadDataRequest(id, coordinatorClock), node);
         }
     }
 
@@ -91,9 +91,9 @@ public class Handler extends AbstractActor {
 
     private void handleReadDataResponse(ReadDataResponse msg) {
         responsesReceived++;
-        // Track maximum Lamport clock from responses for sequential consistency
-        maxLamportClock = Math.max(maxLamportClock, msg.lamportClock());
-        log.info("Handler[{}]: Received ReadDataResponse (lamport={}, responses={})", op_id, msg.lamportClock(), responsesReceived + "/" + nodes.size());
+        // Track maximum clock from responses for sequential consistency
+        maxClock = Math.max(maxClock, msg.clock());
+        log.info("Handler[{}]: Received ReadDataResponse (clock={}, responses={})", op_id, msg.clock(), responsesReceived + "/" + nodes.size());
         if (msg.value() != null) {
             quorum.add(msg.value());
         }
@@ -107,11 +107,11 @@ public class Handler extends AbstractActor {
                 log.info("Handler[{}]: Read quorum achieved. Latest: {} (v={}, n={})", op_id, latestValue, latestItem.version(), latestItem.nodeId());
                 coordinator.tell(new Result(op_id, latestItem), getSelf());
             } else {
-                // UPDATE operation - use max Lamport clock + 1 for new version
+                // UPDATE operation - use max clock + 1 for new version
                 log.info("Handler[{}]: Write quorum of responses achieved for update operation.", op_id);
                 DataItem latestItem = getLatestDataItem();
-                // New version is max of (latest version, max Lamport clock from responses) + 1
-                long newVersion = Math.max(latestItem.version(), maxLamportClock) + 1;
+                // New version is max of (latest version, max clock from responses) + 1
+                long newVersion = Math.max(latestItem.version(), maxClock) + 1;
                 DataItem updatedItem = new DataItem(newValue, newVersion, coordinatorNodeId);
                 
                 log.info("Handler[{}]: Writing (v={}, n={}) - total order", op_id, newVersion, coordinatorNodeId);

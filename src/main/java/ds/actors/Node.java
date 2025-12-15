@@ -34,7 +34,7 @@ public class Node extends AbstractActor {
     private final Map<Integer, Request> requestsLedger;
     private int responseReceived = 0;
     private Cancellable leaveTimeout = null;
-    private long lamportClock = 0;  // Lamport logical clock for sequential consistency
+    private long clock = 0;  // Logical clock for sequential consistency
 
     // Constructors
     public Node(int id, ActorRef bootstrapper, Delayer delayer) {
@@ -140,8 +140,8 @@ public class Node extends AbstractActor {
 
     // ======================= GET/UPDATE operation handlers ====================
     private void handleClientGetRequest(ClientGetRequest msg) {
-        lamportClock++;  // Increment Lamport clock for new operation
-        log.debug("Node[{}]: Received client GET request for key {} (lamport={})", id, msg.key(), lamportClock);
+        clock++;  // Increment clock for new operation
+        log.debug("Node[{}]: Received client GET request for key {} (clock={})", id, msg.key(), clock);
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
@@ -149,12 +149,12 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.GET, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), coordinatorIsReplica, delayer, lamportClock, id));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), coordinatorIsReplica, delayer, clock, id));
     }
     
     private void handleClientUpdateRequest(ClientUpdateRequest msg) {
-        lamportClock++;  // Increment Lamport clock for new operation
-        log.info("Node[{}]: Received client UPDATE request for key {} with value {} (lamport={})", id, msg.key(), msg.value(), lamportClock);
+        clock++;  // Increment clock for new operation
+        log.info("Node[{}]: Received client UPDATE request for key {} with value {} (clock={})", id, msg.key(), msg.value(), clock);
         
         ArrayList<ActorRef> nodeRefs = new ArrayList<>();
         ArrayList<DataItem> quorum = new ArrayList<>();
@@ -162,18 +162,18 @@ public class Node extends AbstractActor {
         
         int op_id = generateOperationId();
         requestsLedger.put(op_id, new Request(getSender(), RequestType.UPDATE, msg.key()));
-        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), coordinatorIsReplica, delayer, lamportClock, id));
+        getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, msg.key(), msg.value(), coordinatorIsReplica, delayer, clock, id));
     }
 
     private void handleReadDataRequest(ReadDataRequest msg) {
-        lamportClock = Math.max(lamportClock, msg.lamportClock()) + 1;  // Update Lamport clock
-        log.info("Node[{}]: Handling read data request for key {} (lamport={})", id, msg.key(), lamportClock);
+        clock = Math.max(clock, msg.clock()) + 1;  // Update clock
+        log.info("Node[{}]: Handling read data request for key {} (clock={})", id, msg.key(), clock);
         DataItem value = data.get(msg.key());
-        delayer.delayedMsg(getSelf(), new ReadDataResponse(value, lamportClock), getSender());
+        delayer.delayedMsg(getSelf(), new ReadDataResponse(value, clock), getSender());
     }
 
     private void handleWriteDataRequest(WriteDataRequest msg) {
-        lamportClock = Math.max(lamportClock, msg.dataItem().version()) + 1;  // Update Lamport clock from message
+        clock = Math.max(clock, msg.dataItem().version()) + 1;  // Update clock from message
         log.info("Node[{}]: Updating key {} with '{}' (v={},n={})", id, msg.key(), msg.dataItem().value(), msg.dataItem().version() + "," + msg.dataItem().nodeId());
         data.put(msg.key(), msg.dataItem());
     }
@@ -289,15 +289,15 @@ public class Node extends AbstractActor {
         } else {
             // Spawn handlers to sync data items
             for (Map.Entry<Integer, DataItem> entry : msg.dataItems().entrySet()) {
-                lamportClock++;  // Increment Lamport clock for each sync operation
+                clock++;  // Increment clock for each sync operation
                 int key = entry.getKey();
                 ArrayList<ActorRef> nodeRefs = new ArrayList<>();
                 ArrayList<DataItem> quorum = new ArrayList<>();
                 boolean coordinatorIsReplica = prepareReplicasAndQuorum(key, nodeRefs, quorum);
                 int op_id = generateOperationId();
                 requestsLedger.put(op_id, new Request(getSelf(), RequestType.GET_JOIN, key));
-                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer, lamportClock, id));
-                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {}, lamport: {})", id, key, op_id, lamportClock);
+                getContext().actorOf(Props.create(Handler.class, op_id, getSelf(), nodeRefs, quorum, key, coordinatorIsReplica, delayer, clock, id));
+                log.debug("Node[{}]: Spawned handler for GET operation on key {} (op_id: {}, clock: {})", id, key, op_id, clock);
             }
         }
     }

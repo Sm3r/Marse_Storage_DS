@@ -32,12 +32,12 @@ public class Types {
     
     // ==================== Handler -> Replica Node Messages ====================
     
-    public record ReadDataRequest(int key, long lamportClock) {}
+    public record ReadDataRequest(int key, long clock) {}
     public record WriteDataRequest(int key, DataItem dataItem) {}
     
     // ==================== Replica Node -> Handler Messages ====================
     
-    public record ReadDataResponse(DataItem value, long lamportClock) {}
+    public record ReadDataResponse(DataItem value, long clock) {}
     
     // ==================== Handler -> Coordinator Node Messages ====================
     
