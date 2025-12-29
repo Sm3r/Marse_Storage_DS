@@ -17,7 +17,7 @@ public class Main {
         
         System.out.println("=== Starting Execution ===\n");
         service.initialize();
-        service.waitForProcessing(2000);
+        service.waitForProcessing(500);
         
         // Interactive TUI
         boolean running = true;
@@ -87,7 +87,7 @@ public class Main {
         System.out.print("Enter node ID: ");
         int nodeId = Integer.parseInt(scanner.nextLine().trim());
         service.addNode(nodeId);
-        service.waitForProcessing(1000);
+        service.waitForProcessing(300);
     }
     
     private static void updateValue(Scanner scanner, ManagementService service) {
@@ -123,7 +123,7 @@ public class Main {
             System.out.println("✓ UPDATE request sent.");
             
             // Wait for operation to complete
-            service.waitForProcessing(1000);
+            service.waitForProcessing(300);
         } finally {
             service.finishOperation();
         }
@@ -159,7 +159,7 @@ public class Main {
             System.out.println("✓ GET request sent.");
             
             // Wait for operation to complete
-            service.waitForProcessing(1000);
+            service.waitForProcessing(300);
         } finally {
             service.finishOperation();
         }
@@ -195,7 +195,7 @@ public class Main {
         }
         
         service.recoverNode(nodeId, peerNodeId);
-        service.waitForProcessing(1000);
+        service.waitForProcessing(300);
     }
     
     private static void leaveNetwork(Scanner scanner, ManagementService service) {
@@ -208,11 +208,11 @@ public class Main {
         }
         
         service.leaveNetwork(nodeId);
-        service.waitForProcessing(3000);
+        service.waitForProcessing(1000);
     }
 
     private static void printAllNodes(ManagementService service) {
         service.printNetworkStatus();
-        service.waitForProcessing(2000);
+        service.waitForProcessing(1000);
     }
 }
