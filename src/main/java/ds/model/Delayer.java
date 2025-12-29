@@ -19,7 +19,7 @@ public class Delayer {
 
     private int gaussianDelay() {
         double val = Settings.meanMs + rnd.nextGaussian() * Settings.stddevMs;
-        return Math.max((int) val, 0);
+        return Math.abs((int) val);
     }
 
     // Normal send, no delay

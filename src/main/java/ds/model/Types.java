@@ -59,7 +59,6 @@ public class Types {
     public record GetAllDataItems(int nodeId) {}
     public record SendAllDataItems(Map<Integer, DataItem> dataItems) {}
 
-
     // ==================== Leaving operation ====================
     public record Leave() {}
     public record AckRequest() {}
