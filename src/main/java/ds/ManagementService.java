@@ -21,6 +21,7 @@ public class ManagementService {
     private final Map<Integer, ActorRef> nodes;
     private final Map<Integer, ActorRef> clients;
     private final Map<Integer, ActorRef> crashedNodes;
+    private final ActorRef managementActor;
     
     // Mutual exclusion for operations
     private boolean topologyChangeInProgress = false;
@@ -33,6 +34,22 @@ public class ManagementService {
         this.nodes = new TreeMap<>();
         this.clients = new TreeMap<>();
         this.crashedNodes = new TreeMap<>();
+        
+        this.managementActor = system.actorOf(Props.create(akka.actor.AbstractActor.class, () -> 
+            new akka.actor.AbstractActor() {
+                @Override
+                public Receive createReceive() {
+                    return receiveBuilder()
+                        .match(Types.LeaveComplete.class, msg -> {
+                            synchronized(ManagementService.this) {
+                                nodes.remove(msg.nodeId());
+                                System.out.println("✓ Node[" + msg.nodeId() + "] successfully removed from active nodes after leave");
+                            }
+                        })
+                        .build();
+                }
+            }
+        ), "managementActor");
     }
 
     // ================ Utility Functions ====================
@@ -135,29 +152,10 @@ public class ManagementService {
         try {
             if (!nodes.containsKey(nodeId)) {
                 ActorRef bootstrapper = pickRandom(nodes);
-                nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer)), "node" + nodeId));
+                nodes.put(nodeId, system.actorOf(Props.create(Node.class, () -> new Node(nodeId, bootstrapper, delayer, managementActor)), "node" + nodeId));
                 System.out.println("✓ Node " + nodeId + " added. Active nodes: " + nodes.keySet());
             } else {
                 System.out.println("✗ ERROR: Node " + nodeId + " already exists");
-            }
-        } finally {
-            finishTopologyChange();
-        }
-    }
-
-    // Remove a node from the system
-    public void removeNode(int nodeId) {
-        if (!canStartTopologyChange()) {
-            return;
-        }
-        
-        try {
-            ActorRef removedNode = nodes.remove(nodeId);
-            if (removedNode != null) {
-                system.stop(removedNode);
-                System.out.println("Node " + nodeId + " removed. Active nodes: " + nodes.keySet());
-            } else {
-                System.out.println("✗ ERROR: Node " + nodeId + " not found");
             }
         } finally {
             finishTopologyChange();
@@ -366,9 +364,8 @@ public class ManagementService {
                 
                 delayer.delayedMsg(ActorRef.noSender(), new Leave(), node);
                 System.out.println("Leave signal sent to node " + nodeId + " (Note: Some operations may timeout if crashed nodes are part of quorums)");
-                // Remove from our tracking map after sending leave signal
-                // The node will stop itself after completing the leave protocol
-                nodes.remove(nodeId);
+                // Note: Node will stop itself after completing the leave protocol
+                // If leave fails, the node will remain active in the system
             } else {
                 System.out.println("✗ ERROR: Node " + nodeId + " not found");
             }

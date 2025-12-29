@@ -32,14 +32,16 @@ public class Node extends AbstractActor {
     private final Map<Integer, DataItem> data;
     private final Map<Integer, ActorRef> peers;
     private final Map<Integer, Request> requestsLedger;
+    private final ActorRef managementActor;
     private int responseReceived = 0;
     private Cancellable leaveTimeout = null;
     private long clock = 0;  // Logical clock for sequential consistency
 
     // Constructors
-    public Node(int id, ActorRef bootstrapper, Delayer delayer) {
+    public Node(int id, ActorRef bootstrapper, Delayer delayer, ActorRef managementActor) {
         this.id = id;
         this.delayer = delayer;
+        this.managementActor = managementActor;
         this.data = new HashMap<>();
         this.peers = new HashMap<>();
         this.requestsLedger = new HashMap<>();
@@ -432,6 +434,12 @@ public class Node extends AbstractActor {
             }
             log.info("Node[{}]: Received all AckResponses, leaving the network", id);
             System.out.println("✓ Node[" + id + "] left the network successfully");
+            
+            // Notify management service before stopping
+            if (managementActor != null) {
+                managementActor.tell(new LeaveComplete(id), getSelf());
+            }
+            
             getContext().stop(getSelf());
         }
     }

@@ -65,6 +65,7 @@ public class Types {
     public record AckRequest() {}
     public record AckResponse(int nodeId) {}
     public record LeaveNotify(int nodeId) {}
+    public record LeaveComplete(int nodeId) {}
 
     // ==================== Utility Messages ====================
     public record Print() {}
